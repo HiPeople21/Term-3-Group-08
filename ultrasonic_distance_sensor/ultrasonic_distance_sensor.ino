@@ -20,8 +20,8 @@ float getDistance(int trigPin, int echoPin) {
 
 void loop() {
   float front = getDistance(TRIG_FRONT, ECHO_FRONT);
-  Serial.print("Front distance: ");
-  Serial.print(front);
-  Serial.println(" cm");
+  // Serial.print("Front distance: ");
+  Serial.println(front);
+  // Serial.println(" cm");
   delay(60);
 }

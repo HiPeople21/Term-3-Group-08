@@ -4,7 +4,9 @@ void setup() {
   Serial.begin(115200); 
   while (!Serial) { delay(10); }
   
-  Serial.println("--- Waveshare TOF Decoder Started ---");
+  // In newer Arduino IDEs, printing a string once at startup 
+  // sets the legend name in the Serial Plotter.
+  Serial.println("Distance_mm");
   
   // 921600 is the factory default for the sensor. 
   // (If it says "Started" but prints nothing else, change this to 115200)
@@ -29,9 +31,9 @@ void loop() {
       // We shift and combine them into a single number.
       unsigned long distance_mm = buffer[8] | (buffer[9] << 8) | (buffer[10] << 16);
       
-      Serial.print("Distance: ");
-      Serial.print(distance_mm);
-      Serial.println(" mm");
+      // --- MODIFIED FOR SERIAL PLOTTER ---
+      // Print ONLY the variable followed by a newline.
+      Serial.println(distance_mm);
       
       // Wipe the start byte so we don't accidentally read this same frame twice
       buffer[0] = 0x00;
