@@ -1,0 +1,161 @@
+=====================================================
+//  Kill Switch + Revive Mechanism Test
+//  UCL RAI Robotics Challenge 2026
+// =====================================================
+//  Running → Solid BLUE
+//  Stopped → Blinking RED
+//  Revive button held → Solid GREEN (overrides all)
+//  Revive released → returns to BLUE or blinking RED
+// =====================================================
+
+// --- Pin Definitions ---
+const int killSwitchPin  = 7;
+const int reviveLeftPin  = 3;
+const int reviveRightPin = 4;
+
+const int redPin   = 9;
+const int greenPin = 10;
+const int bluePin  = 11;
+
+// --- Kill Switch State ---
+bool isStopped = false;
+
+int killReading     = HIGH;
+int lastKillReading = HIGH;
+int killState       = HIGH;
+unsigned long killDebounceTime = 0;
+
+// --- Revive State ---
+int lastReadLeft  = HIGH;  int stableLeft  = HIGH;  unsigned long debounceLeft  = 0;
+int lastReadRight = HIGH;  int stableRight = HIGH;  unsigned long debounceRight = 0;
+bool wasRevived = false;
+
+// --- Blink State ---
+unsigned long previousMillis = 0;
+const long blinkInterval = 500;
+bool redLedState = LOW;
+
+// --- Shared ---
+const unsigned long DEBOUNCE_DELAY = 50;
+
+// -------------------------------------------------------
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(redPin,   OUTPUT);
+  pinMode(greenPin, OUTPUT);
+  pinMode(bluePin,  OUTPUT);
+
+  pinMode(killSwitchPin,  INPUT_PULLUP);
+  pinMode(reviveLeftPin,  INPUT_PULLUP);
+  pinMode(reviveRightPin, INPUT_PULLUP);
+
+  setLedSolidBlue();  // Start: running, solid blue
+
+  Serial.println("=== Kill Switch + Revive Test Ready ===");
+  Serial.println("Robot RUNNING  → Solid BLUE");
+  Serial.println("Kill switch    → toggles stopped (blinking RED) / running");
+  Serial.println("Revive button  → forces GREEN while held");
+}
+
+// -------------------------------------------------------
+
+void loop() {
+
+  // =====================
+  //  1. KILL SWITCH
+  // =====================
+  killReading = digitalRead(killSwitchPin);
+
+  if (killReading != lastKillReading) {
+    killDebounceTime = millis();
+  }
+
+  if ((millis() - killDebounceTime) > DEBOUNCE_DELAY) {
+    if (killReading != killState) {
+      killState = killReading;
+
+      if (killState == LOW) {
+        isStopped = !isStopped;
+
+        if (isStopped) {
+          Serial.println("Kill switch → STOPPED (blinking RED)");
+          digitalWrite(greenPin, LOW);
+          digitalWrite(bluePin,  LOW);
+          redLedState = HIGH;
+          digitalWrite(redPin, HIGH);
+          previousMillis = millis();
+        } else {
+          Serial.println("Kill switch → RUNNING (solid BLUE)");
+          setLedSolidBlue();
+        }
+      }
+    }
+  }
+  lastKillReading = killReading;
+
+
+  // =====================
+  //  2. REVIVE BUTTONS
+  // =====================
+
+  int rL = digitalRead(reviveLeftPin);
+  if (rL != lastReadLeft) debounceLeft = millis();
+  if ((millis() - debounceLeft) > DEBOUNCE_DELAY) stableLeft = rL;
+  lastReadLeft = rL;
+
+  int rR = digitalRead(reviveRightPin);
+  if (rR != lastReadRight) debounceRight = millis();
+  if ((millis() - debounceRight) > DEBOUNCE_DELAY) stableRight = rR;
+  lastReadRight = rR;
+
+  bool revivePressed = (stableLeft == LOW || stableRight == LOW);
+
+  if (revivePressed && !wasRevived) {
+    setLedSolidGreen();
+    wasRevived = true;
+    Serial.println("Revive pressed → GREEN override");
+  }
+  else if (!revivePressed && wasRevived) {
+    wasRevived = false;
+    if (isStopped) {
+      digitalWrite(greenPin, LOW);
+      digitalWrite(bluePin,  LOW);
+      redLedState = HIGH;
+      digitalWrite(redPin, HIGH);
+      previousMillis = millis();
+      Serial.println("Revive released → back to blinking RED (stopped)");
+    } else {
+      setLedSolidBlue();
+      Serial.println("Revive released → back to solid BLUE (running)");
+    }
+  }
+
+
+  // =====================
+  //  3. BLINK HANDLER
+  // =====================
+  if (isStopped && !revivePressed) {
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= blinkInterval) {
+      previousMillis = currentMillis;
+      redLedState = !redLedState;
+      digitalWrite(redPin, redLedState);
+    }
+  }
+}
+
+// -------------------------------------------------------
+
+void setLedSolidBlue() {
+  digitalWrite(redPin,   LOW);
+  digitalWrite(greenPin, LOW);
+  digitalWrite(bluePin,  HIGH);
+}
+
+void setLedSolidGreen() {
+  digitalWrite(redPin,   LOW);
+  digitalWrite(greenPin, HIGH);
+  digitalWrite(bluePin,  LOW);
+}
