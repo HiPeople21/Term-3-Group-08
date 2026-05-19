@@ -58,12 +58,12 @@ const int PIN_TOF_L_XSHUT = 48;
 const int PIN_TOF_R_XSHUT = 50;
  
 // QTR-HD-09RC — centre 9-sensor array
-const uint8_t IR_CENTRE_PINS[9] = {22, 23, 24, 25, 26, 27, 28, 29, 36, 37};
+const uint8_t IR_CENTRE_PINS[9] = { 23, 24, 25, 26, 27, 28, 29, 36, 37};
 
 // QTR-HD-02RC — left & right 2-sensor arrays
 //const uint8_t IR_LEFT_PINS[2]  = {40, 42};
 //const uint8_t IR_RIGHT_PINS[2] = {44, 46};
-414345474951
+
 // ─────────────────────────────────────────────────────────────────────
 //  HARDWARE OBJECTS
 // ─────────────────────────────────────────────────────────────────────
@@ -253,11 +253,11 @@ void setup() {
   qtrCentre.setTypeRC();
   qtrCentre.setSensorPins(IR_CENTRE_PINS, 9);
 
-  qtrLeft.setTypeRC();
-  qtrLeft.setSensorPins(IR_LEFT_PINS, 2);
+  // qtrLeft.setTypeRC();
+  // qtrLeft.setSensorPins(IR_LEFT_PINS, 2);
 
-  qtrRight.setTypeRC();
-  qtrRight.setSensorPins(IR_RIGHT_PINS, 2);
+  // qtrRight.setTypeRC();
+  // qtrRight.setSensorPins(IR_RIGHT_PINS, 2);
 
   Serial.println("[QTR]    OK  (9-centre, 2-left, 2-right)");
 

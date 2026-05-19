@@ -1,9 +1,9 @@
 // --- Pin Definitions ---
 // You can change these to match your specific wiring on the Giga R1 WiFi
-const int buttonPin = 7;     // Connect the push button here
-const int redPin = 9;        // Connect to the Red leg of the RGB LED
-const int greenPin = 10;     // Connect to the Green leg of the RGB LED
-const int bluePin = 11;      // Connect to the Blue leg of the RGB LED
+const int buttonPin = 39;     // Connect the push button here
+const int redPin = 38;        // Connect to the Red leg of the RGB LED
+const int greenPin = 40;     // Connect to the Green leg of the RGB LED
+// const int bluePin = 11;      // Connect to the Blue leg of the RGB LED
 
 // --- State Variables ---
 bool isBlinkingRed = false;  // false = Solid Green, true = Blinking Red
@@ -23,7 +23,7 @@ void setup() {
   // Configure the LED pins as outputs
   pinMode(redPin, OUTPUT);
   pinMode(greenPin, OUTPUT);
-  pinMode(bluePin, OUTPUT);
+  // pinMode(bluePin, OUTPUT);
 
   // Configure the button pin with the internal pull-up resistor.
   // This means the pin reads HIGH normally, and LOW when the button is pressed.
@@ -59,7 +59,7 @@ void loop() {
         } else {
           // Prepare for red blinking by turning off green and blue immediately
           digitalWrite(greenPin, LOW);
-          digitalWrite(bluePin, LOW);
+          // digitalWrite(bluePin, LOW);
           
           // Turn red ON immediately so the blink starts right away
           redLedState = HIGH; 
@@ -90,5 +90,5 @@ void loop() {
 void setLedSolidGreen() {
   digitalWrite(redPin, LOW);
   digitalWrite(greenPin, HIGH);
-  digitalWrite(bluePin, LOW);
+  // digitalWrite(bluePin, LOW);
 }

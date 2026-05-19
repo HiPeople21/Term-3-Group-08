@@ -1,5 +1,5 @@
-#define TRIG_FRONT 2
-#define ECHO_FRONT 3
+#define TRIG_FRONT 44
+#define ECHO_FRONT 42
 
 void setup() {
   pinMode(TRIG_FRONT, OUTPUT);

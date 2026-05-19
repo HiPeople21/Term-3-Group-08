@@ -40,13 +40,13 @@ const int   UDP_PORT  = 4210;
 
 // Kill switch & revive buttons (INPUT_PULLUP → active LOW)
 const int PIN_KILL          = 2;
-const int PIN_REVIVE_LEFT   = 3;
-const int PIN_REVIVE_RIGHT  = 4;
+const int PIN_REVIVE_LEFT   = 46;
+const int PIN_REVIVE_RIGHT  = 48;
 
 // RGB LED — common cathode: HIGH = ON
 //   Physical pinout on board: R – GND – G – B
-const int PIN_LED_R = 9;
-const int PIN_LED_G = 10;
+const int PIN_LED_R = 38;
+const int PIN_LED_G = 40;
 const int PIN_LED_B = 11;
 
 // HC-SR04 ultrasonic (ECHO reassigned to 12 — pin 6 physically blocked)
