@@ -1,39 +1,177 @@
-const int testPin = 3; // We will test just one sensor first on Pin 3
+// #include <QTRSensors.h>
 
-void setup() {
-  Serial.begin(9600);
+// // This example is designed for use with eight RC QTR sensors. These
+// // reflectance sensors should be connected to digital pins 3 to 10. The
+// // sensors' emitter control pin (CTRL or LEDON) can optionally be connected to
+// // digital pin 2, or you can leave it disconnected and remove the call to
+// // setEmitterPin().
+// //
+// // The setup phase of this example calibrates the sensors for ten seconds and
+// // turns on the Arduino's LED (usually on pin 13) while calibration is going
+// // on. During this phase, you should expose each reflectance sensor to the
+// // lightest and darkest readings they will encounter. For example, if you are
+// // making a line follower, you should slide the sensors across the line during
+// // the calibration phase so that each sensor can get a reading of how dark the
+// // line is and how light the ground is.  Improper calibration will result in
+// // poor readings.
+// //
+// // The main loop of the example reads the calibrated sensor values and uses
+// // them to estimate the position of a line. You can test this by taping a piece
+// // of 3/4" black electrical tape to a piece of white paper and sliding the
+// // sensor across it. It prints the sensor values to the serial monitor as
+// // numbers from 0 (maximum reflectance) to 1000 (minimum reflectance) followed
+// // by the estimated location of the line as a number from 0 to 5000. 1000 means
+// // the line is directly under sensor 1, 2000 means directly under sensor 2,
+// // etc. 0 means the line is directly under sensor 0 or was last seen by sensor
+// // 0 before being lost. 5000 means the line is directly under sensor 5 or was
+// // last seen by sensor 5 before being lost.
+
+// QTRSensors qtr;
+
+// const uint8_t SensorCount = 12;
+// uint16_t sensorValues[SensorCount];
+// void setup()
+// {
+//   // configure the sensors      5 8 2 6 7 3 9 1 
+//   //                            22, 23, 24, 25, 27, 28, 29, 36, 37,
+//   qtr.setTypeRC();
+//   qtr.setSensorPins((const uint8_t[]){31, 30, 
+//   27, 36, 23, 28, 29, 24, 37, 22,
+//   33, 32
+//   }, SensorCount);
+//   // qtr.setEmitterPin(2);
+
+//   delay(500);
+//   pinMode(LED_BUILTIN, OUTPUT);
+//   digitalWrite(LED_BUILTIN, HIGH); // turn on Arduino's LED to indicate we are in calibration mode
+
+//   // 2.5 ms RC read timeout (default) * 10 reads per calibrate() call
+//   // = ~25 ms per calibrate() call.
+//   // Call calibrate() 400 times to make calibration take about 10 seconds.
+//   for (uint16_t i = 0; i < 400; i++)
+//   {
+//     qtr.calibrate();
+//   }
+//   digitalWrite(LED_BUILTIN, LOW); // turn off Arduino's LED to indicate we are through with calibration
+
+//   // print the calibration minimum values measured when emitters were on
+//   Serial.begin(9600);
+//   for (uint8_t i = 0; i < SensorCount; i++)
+//   {
+//     Serial.print(qtr.calibrationOn.minimum[i]);
+//     Serial.print(' ');
+//   }
+//   Serial.println();
+
+//   // print the calibration maximum values measured when emitters were on
+//   for (uint8_t i = 0; i < SensorCount; i++)
+//   {
+//     Serial.print(qtr.calibrationOn.maximum[i]);
+//     Serial.print(' ');
+//   }
+//   Serial.println();
+//   Serial.println();
+//   delay(1000);
+// }
+
+// void loop()
+// {
+//   // read calibrated sensor values and obtain a measure of the line position
+//   // from 0 to 5000 (for a white line, use readLineWhite() instead)
+//   uint16_t position = qtr.readLineBlack(sensorValues);
+
+//   // print the sensor values as numbers from 0 to 1000, where 0 means maximum
+//   // reflectance and 1000 means minimum reflectance, followed by the line
+//   // position
+//   for (uint8_t i = 0; i < SensorCount; i++)
+//   {
+//     Serial.print(sensorValues[i]);
+//     Serial.print('\t');
+//   }
+//   Serial.println(position);
+
+//   delay(250);
+// }
+
+#include <QTRSensors.h>
+
+QTRSensors qtr;
+
+const uint8_t SensorCount = 12;
+int err;
+uint16_t sensorValues[SensorCount];
+
+// FIX 1: Define pins globally to prevent the GIGA 4-blink memory crash.
+// Layout: [QTRX] [QTRX]  --- [8x Standard QTR] ---  [QTRX] [QTRX]
+const uint8_t sensorPins[SensorCount] = {31, 30, 27, 36, 23, 28, 29, 24, 37, 22, 33, 32};
+
+void setup()
+{
+  // FIX 2: Start Serial early and at a faster baud rate
+  Serial.begin(115200);
+  while (!Serial && millis() < 3000); 
+
+  // configure the sensors
+  qtr.setTypeRC();
+  qtr.setSensorPins(sensorPins, SensorCount);
+  // qtr.setEmitterPin(2);
+
+  delay(500);
   pinMode(LED_BUILTIN, OUTPUT);
-  // Give the serial port a second to connect
-  delay(2000); 
-  Serial.println("Starting Custom Sensor Read...");
+  digitalWrite(LED_BUILTIN, HIGH); 
+
+  Serial.println("[SYSTEM] Starting calibration...");
+  Serial.println("[SYSTEM] Sweep ALL 12 sensors across the line continuously!");
+
+  // Call calibrate() 400 times to make calibration take about 10 seconds.
+  for (uint16_t i = 0; i < 400; i++)
+  {
+    qtr.calibrate();
+    
+  }
+  
+  digitalWrite(LED_BUILTIN, LOW); 
+  Serial.println("[SYSTEM] Calibration complete.");
+
+  // print the calibration minimum values
+  Serial.print("MIN: ");
+  for (uint8_t i = 0; i < SensorCount; i++)
+  {
+    Serial.print(qtr.calibrationOn.minimum[i]);
+    Serial.print(' ');
+  }
+  Serial.println();
+
+  // print the calibration maximum values
+  Serial.print("MAX: ");
+  for (uint8_t i = 0; i < SensorCount; i++)
+  {
+    Serial.print(qtr.calibrationOn.maximum[i]);
+    Serial.print(' ');
+  }
+  Serial.println("\n");
+  delay(1000);
 }
 
-void loop() {
-  // 1. Turn pin to OUTPUT and push it HIGH to charge the sensor's capacitor
-  pinMode(testPin, OUTPUT);
-  digitalWrite(testPin, HIGH);
-  delayMicroseconds(15); // Wait 15 microseconds to fully charge
+void loop()
+{
+  // read calibrated sensor values and obtain a measure of the line position
+  // Since you have 12 sensors, the maximum position value is now 11000
+  uint16_t position = qtr.readLineBlack(sensorValues);
 
-  // 2. Turn pin to INPUT and measure how fast it drains back to LOW
-  pinMode(testPin, INPUT);
-  unsigned long startTime = micros();
-  unsigned long drainTime = 0;
-
-  // 3. Count the microseconds until the pin drops to LOW
-  while (digitalRead(testPin) == HIGH) {
-    drainTime = micros() - startTime;
-    
-    // If it takes longer than 3000 microseconds, it's definitely on a black line.
-    // We force a break here so Mbed OS never gets trapped and crashes!
-    if (drainTime > 3000) {
-      break; 
-    }
+  for (uint8_t i = 0; i < SensorCount; i++)
+  {
+    Serial.print(sensorValues[i]);
+    Serial.print('\t');
   }
-
-  // 4. Print the result
-  Serial.print("Pin 3 Drain Time (us): ");
-  Serial.println(drainTime);
-
-  // 5. Briefly pause to let the GIGA's operating system breathe
-  delay(100); 
+  
+  Serial.print("| Pos: ");
+  Serial.print(position);
+  err = 6000 - position;
+  if(err<0){
+    err = err*-1;
+  }
+  Serial.print("| Error: ");
+  Serial.println(err);
+  delay(100); // 100ms is usually better for serial debugging than 250ms
 }
