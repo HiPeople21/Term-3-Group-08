@@ -5,3 +5,5 @@ void initMotors();
 void setRightTrack(int speed);
 void setLeftTrack(int speed);
 void stopTracks();
+void rotatePlanter();
+void triggerPlanterRotation();

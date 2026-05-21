@@ -37,6 +37,7 @@ static const int trackSpeed = 800;
 
 void revive() {
   // Placeholder — revival logic to be implemented
+  Serial.println("Revive");
 }
 
 void checkReviveButton() {
@@ -89,7 +90,6 @@ void checkKillButton() {
   }
 }
 
-// Fixed using RFID_test approach: print UID, halt tag, no planter sequence
 void checkRFID() {
   if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial()) return;
 
@@ -100,6 +100,9 @@ void checkRFID() {
   }
   Serial.println();
   mfrc522.PICC_HaltA();
+
+  Serial.println("[Planter] Rotation triggered.");
+  triggerPlanterRotation();
 }
 
 // -----------------------------------------------------------------------
@@ -122,6 +125,10 @@ void setup() {
   // TOF sensors (Serial1 + Serial4) and ultrasonic (pins 44/42)
   initSensors();
   Serial.println("[Sensors] TOF + Ultrasonic ready.");
+
+  // IR array (QTR 12-sensor, ~10s calibration)
+  initIRArray();
+  Serial.println("[IR] Ready.");
 
   // Kill switch LED + button
   pinMode(LED_RED_PIN,      OUTPUT);
@@ -172,10 +179,14 @@ void loop() {
     else if (cmd == 'x' || cmd == 'X') { stopTracks(); }
   }
 
-  // RFID — prints UID when card detected
+  // RFID — triggers planter rotation when card detected
   checkRFID();
 
-  // Sensor readings — printed as fast as data arrives (TOF) or every 100ms (ultrasonic)
-  readTOFSensors();
-  readUltrasonic();
+  // Drive planter motor toward target position
+  rotatePlanter();
+
+  // Sensor readings — printed as fast as data arrives (TOF) or every 100ms (ultrasonic/IR)
+  // readTOFSensors();
+  // readUltrasonic();
+  // readIRArray();
 }
