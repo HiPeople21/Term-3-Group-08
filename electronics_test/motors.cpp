@@ -12,7 +12,7 @@ void initMotors() {
 }
 
 void setRightTrack(int speed) {
-  mc.setSpeed(1, -speed);
+  mc.setSpeed(1, speed);
 }
 
 void setLeftTrack(int speed) {

@@ -3,7 +3,7 @@ const int redLedPin = 38;
 const int greenLedPin = 40;
 
 // Define Button pins
-const int button1Pin = 46;
+// const int button1Pin = 46;
 const int button2Pin = 48;
 
 void setup() {

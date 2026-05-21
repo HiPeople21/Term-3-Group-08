@@ -65,32 +65,24 @@ void onMessage(const MessageMetadata& metadata, const uint8_t* payload, size_t l
   Serial.print(": ");
   Serial.println(incomingMsg);
 
-  // 3. ROBUST COMMAND PROCESSOR
-  String enableVal = "";
+  // 3. COMMAND PROCESSOR — only act on type=disable reason=operator enabled=<bool>
+  bool isDisableCmd = commandMap.count("type")   && commandMap["type"].equalsIgnoreCase("disable");
+  bool isOperator   = commandMap.count("reason") && commandMap["reason"].equalsIgnoreCase("operator");
+  bool hasEnabled   = commandMap.count("enabled") > 0;
 
-  // Check if the server sent "enable" OR "enabled" (Catches both heartbeats and disable commands)
-  if (commandMap.count("enable")) {
-    enableVal = commandMap["enable"];
-  } else if (commandMap.count("enabled")) {
-    enableVal = commandMap["enabled"];
-  }
+  if (!isDisableCmd || !isOperator || !hasEnabled) return;
 
-  // If we found either version of the key, process it
-  if (enableVal.length() > 0) {
-    
-    // If server says true or 1 -> We want Solid Green
-    if (enableVal.equalsIgnoreCase("true") || enableVal == "1") {
-      if (isBlinkingRed) {
-        Serial.println("[SYSTEM] Enable signal received. Going GREEN.");
-        toggleSystemState();
-      }
-    } 
-    // If server says false or 0 -> We want Blinking Red
-    else if (enableVal.equalsIgnoreCase("false") || enableVal == "0") {
-      if (!isBlinkingRed) {
-        Serial.println("[SYSTEM] Kill signal received! Going RED.");
-        toggleSystemState(); 
-      }
+  String enableVal = commandMap["enabled"];
+
+  if (enableVal.equalsIgnoreCase("true")) {
+    if (isBlinkingRed) {
+      Serial.println("[SYSTEM] Enable signal received. Going GREEN.");
+      toggleSystemState();
+    }
+  } else if (enableVal.equalsIgnoreCase("false")) {
+    if (!isBlinkingRed) {
+      Serial.println("[SYSTEM] Kill signal received! Going RED.");
+      toggleSystemState();
     }
   }
 }
