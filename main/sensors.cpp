@@ -1,4 +1,11 @@
 #include "sensors.h"
+#include <QTRSensors.h>
+
+// --- IR Array ---
+static QTRSensors qtr;
+static const uint8_t kIRCount = 12;
+static const uint8_t kIRPins[kIRCount] = {31, 30, 27, 36, 23, 28, 29, 24, 37, 22, 33, 32};
+static uint16_t irValues[kIRCount];
 
 #define TRIG_FRONT 44
 #define ECHO_FRONT 42
@@ -57,4 +64,57 @@ void readUltrasonic() {
   Serial.print("Ultrasonic: ");
   Serial.print(distCm);
   Serial.println(" cm");
+}
+
+void initIRArray() {
+  qtr.setTypeRC();
+  qtr.setSensorPins(kIRPins, kIRCount);
+
+  delay(500);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+  Serial.println("[IR] Calibrating — sweep all 12 sensors across the line...");
+
+  for (uint16_t i = 0; i < 400; i++) {
+    qtr.calibrate();
+  }
+
+  digitalWrite(LED_BUILTIN, LOW);
+  Serial.println("[IR] Calibration complete.");
+
+  Serial.print("[IR] MIN: ");
+  for (uint8_t i = 0; i < kIRCount; i++) {
+    Serial.print(qtr.calibrationOn.minimum[i]);
+    Serial.print(' ');
+  }
+  Serial.println();
+
+  Serial.print("[IR] MAX: ");
+  for (uint8_t i = 0; i < kIRCount; i++) {
+    Serial.print(qtr.calibrationOn.maximum[i]);
+    Serial.print(' ');
+  }
+  Serial.println();
+
+  delay(1000);
+}
+
+void readIRArray() {
+  static unsigned long lastRead = 0;
+  if (millis() - lastRead < 100) return;
+  lastRead = millis();
+
+  uint16_t position = qtr.readLineBlack(irValues);
+
+  for (uint8_t i = 0; i < kIRCount; i++) {
+    Serial.print(irValues[i]);
+    Serial.print('\t');
+  }
+
+  int err = 6000 - (int)position;
+  if (err < 0) err = -err;
+  Serial.print("| Pos: ");
+  Serial.print(position);
+  Serial.print(" | Err: ");
+  Serial.println(err);
 }
