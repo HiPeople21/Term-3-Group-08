@@ -1,11 +1,15 @@
 #include <Wire.h>
 #include <QTRSensors.h>
 #include "motors.h"
+#include "MFRC522_I2C.h"
+
 
 QTRSensors qtr;
 const uint8_t SensorCount = 12;
 uint16_t sensorValues[SensorCount];
 const uint8_t sensorPins[SensorCount] = {31, 30, 27, 36, 23, 28, 29, 24, 37, 22, 33, 32};
+MFRC522_I2C mfrc522(0x28, -1, &Wire1);
+
 
 float Kp = 1.2;
 float Ki = 0.0;
@@ -63,6 +67,13 @@ void runLineFollower() {
   Serial.print(" | R: "); Serial.println(rightSpeed);
 }
 
+void potentialPlant(){
+  Serial.println(sensorValues[SensorCount/2]);
+  if(sensorValues[SensorCount/2] >= 140 &&  sensorValues[SensorCount/2] <= 400){
+    Serial.println("The middle IR sensor may have passed over a hole");
+  }
+}
+
 void calibrate() {
   Serial.println("[CAL] Sweep ALL 12 sensors across the line...");
   digitalWrite(LED_BUILTIN, HIGH);
@@ -84,6 +95,7 @@ void setup() {
 
   Wire1.begin();
   initMotors();
+  mfrc522.PCD_Init();
 
   pinMode(LED_BUILTIN, OUTPUT);
 
@@ -109,5 +121,19 @@ void loop() {
 
   if (running) {
     runLineFollower();
+    potentialPlant();
+    // M5.Lcd.setCursor(40, 47);
+    if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial()) {
+        delay(200);
+        return;
+    }
+    // M5.Lcd.fillRect(42, 47, 320, 20, BLACK);
+    for (byte i = 0; i < mfrc522.uid.size; i++) {
+        Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+        Serial.print(mfrc522.uid.uidByte[i], HEX);
+    }
+    // M5.Lcd.println("");
+    Serial.println("");
   }
+  
 }
