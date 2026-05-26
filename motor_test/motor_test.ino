@@ -5,7 +5,8 @@ static const int trackSpeed = 800;
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial && millis() < 3000);
+  while (!Serial && millis(
+) < 3000);
 
   Wire1.begin();
   initMotors();
