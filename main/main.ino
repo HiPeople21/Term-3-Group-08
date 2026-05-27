@@ -30,8 +30,50 @@ static int  reviveBtnState  = HIGH;
 static int  lastReviveState = HIGH;
 static unsigned long lastReviveDebounce = 0;
 
-// --- Motor speed ---
+// --- Motor speed (manual control) ---
 static const int trackSpeed = 800;
+
+// --- Line Following / State Machine ---
+float Kp = 1.0;
+float Ki = 0.0;
+float Kd = 0.0;
+
+const int baseSpeed = 800 * 6 / 7.2;
+const int maxSpeed  = 800 * 6 / 7.2;
+const int minSpeed  = -(800 * 6 / 7.2);
+const int setpoint  = 5500;
+
+const long ticksToHole  = 1355;
+const long ticksToPlant = 233;
+
+const unsigned long IR_WINDOW_MS = 1000;
+
+const long junctionCooldownTicks = 200;
+long lastJunctionTick = -9999;
+
+float integral  = 0;
+float prevError = 0;
+unsigned long prevTime = 0;
+
+bool running = false;
+
+int prevMiddleValue = 0;
+
+long encoderAtIR   = 0;
+long planterTarget = 0;
+
+unsigned long irDetectedAt     = 0;
+unsigned long plantingStartedAt = 0;
+
+enum State {
+  FOLLOWING,
+  WAITING_FOR_RFID,
+  DRIVING_TO_HOLE,
+  PLANTING,
+  JUNCTION_HANDLING
+};
+
+State state = FOLLOWING;
 
 // -----------------------------------------------------------------------
 
@@ -105,6 +147,62 @@ void checkRFID() {
   triggerPlanterRotation();
 }
 
+// --- Line Following Helpers ---
+
+float computePID(float position) {
+  unsigned long now = millis();
+  float dt = (now - prevTime) / 1000.0;
+  if (dt <= 0) return 0;
+  prevTime = now;
+
+  float error = setpoint - position;
+  integral += error * dt;
+  float derivative = (error - prevError) / dt;
+  prevError = error;
+
+  return (Kp * error) + (Ki * integral) + (Kd * derivative);
+}
+
+void resetPID() {
+  integral  = 0;
+  prevError = 0;
+  prevTime  = millis();
+}
+
+void runLineFollower() {
+  uint16_t position = readIRPosition();
+  float correction  = computePID(position);
+
+  int leftSpeed  = constrain(baseSpeed - correction, minSpeed, maxSpeed);
+  int rightSpeed = constrain(baseSpeed + correction, minSpeed, maxSpeed);
+
+  setLeftTrack(leftSpeed);
+  setRightTrack(rightSpeed);
+}
+
+bool checkForHole() {
+  uint8_t midIdx      = getIRSensorCount() / 2;
+  int     middleValue = getIRValue(midIdx);
+
+  bool inHole     = middleValue >= 100 && middleValue <= 400;
+  bool wasOutside = prevMiddleValue < 100 || prevMiddleValue > 400;
+
+  prevMiddleValue = middleValue;
+
+  return inHole && wasOutside;
+}
+
+bool isJunction() {
+  readIRPosition();
+  uint8_t lastIdx = getIRSensorCount() - 1;
+  return (getIRValue(0) > 800 && getIRValue(lastIdx) > 800);
+}
+
+void driveStraight(int speed) {
+  setLeftTrack(speed);
+  setRightTrack(speed);
+}
+
 // -----------------------------------------------------------------------
 
 void setup() {
@@ -112,14 +210,14 @@ void setup() {
   while (!Serial && millis() < 3000);
 
   // I2C for RFID + motors
-  // Wire1.begin();
+  Wire1.begin();
 
   // RFID reader
-  // mfrc522.PCD_Init();
+  mfrc522.PCD_Init();
   Serial.println("[RFID] Reader ready.");
 
   // Motor shield (Wire1, address 0x12)
-  // initMotors();
+  initMotors();
   Serial.println("[Motors] Ready.");
 
   // TOF sensors (Serial1 + Serial4) and ultrasonic (pins 44/42)
@@ -127,7 +225,7 @@ void setup() {
   Serial.println("[Sensors] TOF + Ultrasonic ready.");
 
   // IR array (QTR 12-sensor, ~10s calibration)
-  // initIRArray();
+  initIRArray();
   Serial.println("[IR] Ready.");
 
   // Kill switch LED + button
@@ -143,7 +241,7 @@ void setup() {
   initWifi();
 
   Serial.println("=== SYSTEM ONLINE ===");
-  Serial.println("Tracks: W/S/A/D = Fwd/Rev/Left/Right | X = Stop");
+  Serial.println("Tracks: W/S/A/D = Fwd/Rev/Left/Right | X = Stop | G = Start autonomy");
 
   setupGrid();
   register_bot();
@@ -166,58 +264,145 @@ void loop() {
   bool killed = isKilledLocal || !isSystemEnabled();
   static bool wasPreviouslyKilled = false;
   if (killed && !wasPreviouslyKilled) {
-    // stopTracks();
-    // stopPlanter();
+    stopTracks();
+    stopPlanter();
     wasPreviouslyKilled = true;
   } else if (!killed) {
     wasPreviouslyKilled = false;
   }
-  // Serial.print(isKilledLocal);
-  // Serial.print(" ");
-  // Serial.println(isSystemEnabled());
-  // Serial.println(killed);
-  // Serial track control (disabled when killed)
+
   if (!killed && Serial.available() > 0) {
     char cmd = Serial.read();
-    if      (cmd == 'w' || cmd == 'W') {Serial.println("Executed w"); setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  }
-    else if (cmd == 's' || cmd == 'S') {Serial.println("Executed a"); setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
-    else if (cmd == 'a' || cmd == 'A') {Serial.println("Executed s"); setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); }
-    else if (cmd == 'd' || cmd == 'D') {Serial.println("Executed d"); setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  }
-    else if (cmd == 'x' || cmd == 'X') {Serial.println("Executed x"); stopTracks(); }
-    else if (cmd == '1')               { Serial.println("Executed 1"); openAirlockA(); }
-    else if (cmd == '2')               { Serial.println("Executed 2"); openAirlockB(); }
-    
-    // Safely handling multi-part commands with parseInt
-    else if (cmd == '3') { 
-      Serial.println("Executed 3");
-      int index = Serial.parseInt(); // Waits for and reads the next actual number
-      // Serial.println(UIDs[index]);
 
-      seedPlanted(UIDs[index]); 
+    if (cmd == 'g' || cmd == 'G') {
+      running = true;
+      resetPID();
+      state = FOLLOWING;
+      Serial.println("Running");
+    } else if (cmd == 'x' || cmd == 'X') {
+      running = false;
+      stopTracks();
+      Serial.println("Stopped");
+    } else if (!running) {
+      if      (cmd == 'w' || cmd == 'W') { Serial.println("Executed w"); setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  }
+      else if (cmd == 's' || cmd == 'S') { Serial.println("Executed s"); setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
+      else if (cmd == 'a' || cmd == 'A') { Serial.println("Executed a"); setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); }
+      else if (cmd == 'd' || cmd == 'D') { Serial.println("Executed d"); setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  }
+      else if (cmd == '1')               { Serial.println("Executed 1"); openAirlockA(); }
+      else if (cmd == '2')               { Serial.println("Executed 2"); openAirlockB(); }
+      else if (cmd == '3') {
+        Serial.println("Executed 3");
+        int index = Serial.parseInt();
+        seedPlanted(UIDs[index]);
+      }
+      else if (cmd == '4') {
+        Serial.println("Executed 4");
+        int index = Serial.parseInt();
+        checkFertility(UIDs[index]);
+      }
     }
-    else if (cmd == '4') { 
-      Serial.println("Executed 4");
-      int index = Serial.parseInt(); // Waits for and reads the next actual number
-      // Serial.println(UIDs[index]);
-      checkFertility(UIDs[index]); 
-    }
-
   }
 
-  // RFID — triggers planter rotation when card detected
+  // RFID — triggers planter rotation when card detected (manual mode only)
   // checkRFID();
 
-<<<<<<< HEAD
-  // Drive planter motor toward target position
-  rotatePlanter();
-=======
-  // Drive planter motor toward target position (disabled when killed)
-<<<<<<< HEAD
-  // if (!killed) rotatePlanter();
-=======
-  if (!killed) rotatePlanter();
->>>>>>> e2490b00b95e1734a78b993fd4a60acf054791f3
->>>>>>> 6628e068e92065f96dc18ecffbde3892c104b968
+  if (running && !killed) {
+    Serial.println(state);
+    switch (state) {
+
+      case FOLLOWING: {
+        runLineFollower();
+
+        if (checkForHole()) {
+          irDetectedAt = millis();
+          encoderAtIR  = getTrackEncoder();
+          state = WAITING_FOR_RFID;
+          Serial.println("Hole detected");
+          break;
+        } else if (isJunction()) {
+          stopTracks();
+          state = JUNCTION_HANDLING;
+          Serial.println("Junction detected");
+          break;
+        } else {
+          Serial.print("Following Line, not at junction");
+          break;
+        }
+      }
+
+      case JUNCTION_HANDLING: {
+        driveStraight(600 * 6 / 7.2);
+        delay(200);
+        stopTracks();
+
+        lastJunctionTick = getTrackEncoder();
+        resetPID();
+
+        state = FOLLOWING;
+        Serial.println("Junction cleared");
+        break;
+      }
+
+      case WAITING_FOR_RFID: {
+        if (isJunction()) {
+          driveStraight(600 * 6 / 7.2);
+          Serial.println("going straight to rfid");
+        } else {
+          runLineFollower();
+        }
+
+        if (millis() - irDetectedAt > IR_WINDOW_MS) {
+          state = FOLLOWING;
+          Serial.println("RFID timeout, false positive ir detection");
+          break;
+        }
+
+        if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+          mfrc522.PICC_HaltA();
+          mfrc522.PCD_StopCrypto1();
+          state = DRIVING_TO_HOLE;
+          Serial.println("RFID confirmed");
+        }
+        break;
+      }
+
+      case DRIVING_TO_HOLE: {
+        long currentTicks = getTrackEncoder();
+        long tickTarget   = encoderAtIR + ticksToHole;
+        long encerror     = tickTarget - currentTicks;
+
+        if (encerror > 5) {
+          driveStraight(600 * 6 / 7.2);
+          Serial.print("going straight to hole");
+        } else {
+          stopTracks();
+          planterTarget    = getPlanterEncoder() + ticksToPlant;
+          plantingStartedAt = millis();
+          state = PLANTING;
+          Serial.println("At planting position");
+        }
+        break;
+      }
+
+      case PLANTING: {
+        long planterPos = getPlanterEncoder();
+
+        if (abs(planterPos - planterTarget) > 5) {
+          setPlanter(500 * 6 / 7.2);
+        } else {
+          setPlanter(0);
+          delay(500);
+          resetPID();
+          state = FOLLOWING;
+          Serial.println("Plant complete");
+        }
+        break;
+      }
+    }
+  } else if (!killed) {
+    // Drive planter motor toward target position (manual mode)
+    rotatePlanter();
+  }
 
   // Sensor readings — printed as fast as data arrives (TOF) or every 100ms (ultrasonic/IR)
   // readTOFSensors();

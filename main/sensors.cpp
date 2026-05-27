@@ -3,8 +3,11 @@
 
 // --- IR Array ---
 static QTRSensors qtr;
-static const uint8_t kIRCount = 12;
-static const uint8_t kIRPins[kIRCount] = {31, 30, 27, 36, 23, 28, 29, 24, 37, 22, 33, 32};
+static const uint8_t kIRCount = 11;
+static const uint8_t kIRPins[kIRCount] = {
+  31, 30, 36, 
+  23, 28, 29, 24, 
+  37, 22, 33, 32};
 static uint16_t irValues[kIRCount];
 
 #define TRIG_FRONT 44
@@ -117,4 +120,16 @@ void readIRArray() {
   Serial.print(position);
   Serial.print(" | Err: ");
   Serial.println(err);
+}
+
+uint16_t readIRPosition() {
+  return qtr.readLineBlack(irValues);
+}
+
+uint16_t getIRValue(uint8_t index) {
+  return irValues[index];
+}
+
+uint8_t getIRSensorCount() {
+  return kIRCount;
 }

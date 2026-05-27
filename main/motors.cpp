@@ -15,10 +15,11 @@
 static MotoronI2C mc;
 
 volatile long encoderPosPlanter = 0;
+volatile long encoderPosTrack   = 0;
 long targetPos = 0;
 
 float countsPerRevolution = 1400.0;
-long ticksFor60Degrees = countsPerRevolution / 6; // 250 ticks
+long ticksFor60Degrees = countsPerRevolution / 6; // 233 ticks
 int planterLinearspeed = 600;
 int tracksDistance = 170; // 170 mm
 float wheelDiameter = 38.5;
@@ -38,6 +39,14 @@ void updateEncoder(int encoder_a, int encoder_b) {
   }
 }
 
+static void updateTrackEncoder() {
+  if (digitalRead(M1A) == digitalRead(M1B)) {
+    encoderPosTrack++;
+  } else {
+    encoderPosTrack--;
+  }
+}
+
 void initMotors() {
   mc.setBus(&Wire1);
   mc.setAddress(18); // 0x12
@@ -49,10 +58,14 @@ void initMotors() {
   attachInterrupt(digitalPinToInterrupt(ENCODER_A), [](){
     updateEncoder(ENCODER_A, ENCODER_B);
   }, CHANGE);
+
+  pinMode(M1A, INPUT_PULLUP);
+  pinMode(M1B, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(M1A), updateTrackEncoder, CHANGE);
 }
 
 void setRightTrack(int speed) {
-  mc.setSpeed(1, -speed);
+  mc.setSpeed(1, speed);
 }
 
 void setLeftTrack(int speed) {
@@ -62,6 +75,10 @@ void setLeftTrack(int speed) {
 void stopTracks() {
   mc.setSpeed(1, 0);
   mc.setSpeed(3, 0);
+}
+
+void setPlanter(int speed) {
+  mc.setSpeed(2, speed);
 }
 
 void rotatePlanter() {
@@ -85,4 +102,18 @@ void stopPlanter() {
 
 void triggerPlanterRotation() {
   targetPos += ticksFor60Degrees;
+}
+
+long getTrackEncoder() {
+  noInterrupts();
+  long value = encoderPosTrack;
+  interrupts();
+  return value;
+}
+
+long getPlanterEncoder() {
+  noInterrupts();
+  long value = encoderPosPlanter;
+  interrupts();
+  return value;
 }

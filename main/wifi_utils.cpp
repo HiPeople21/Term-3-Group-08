@@ -7,7 +7,7 @@
 static MiniMessenger messenger;
 static bool systemEnabled = true;
 static unsigned long lastRegisterMs = 0;
-static const char* BoardId = "Igor-Inator";
+static const char* BoardId = "I'm Tired";
 bool isFertile = false;
 
 unsigned long lastHeartbeatMs = 0;
