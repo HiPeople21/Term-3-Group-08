@@ -17,14 +17,14 @@ bool isRunning = false;
 
 const int TARGET_DISTANCE_MM = 150; 
 // 恢复为直接的 PWM 动力输出 (-800 到 800 范围)
-const int BASE_PWM = (800 * 6 / 7.2); 
+const int BASE_PWM = 550; 
 
 const int DEADBAND_PWM = 60; 
 
 
-float Kp = 1.5; 
+float Kp = 8; 
 float Ki = 0; 
-float Kd = 0.8; // 履带车单环特别需要较高的 Kd 来提前“踩刹车”防止撞墙
+float Kd = 20; // 履带车单环特别需要较高的 Kd 来提前“踩刹车”防止撞墙
 
 float integral = 0;
 float prevError = 0;
@@ -74,7 +74,7 @@ void loop() {
  
   if (isRunning && deltaTime >= 0.02) {
     
-    // 确保右侧 ToF 数据有效且新鲜 (<100ms)
+   
     if (sensor2.current_distance > 0 && (currentTime - sensor2.last_update_time < 100)) {
       
 
