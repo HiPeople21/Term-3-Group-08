@@ -70,6 +70,14 @@ void rotatePlanter() {
   }
 }
 
+<<<<<<< HEAD
+=======
+void stopPlanter() {
+  mc.setSpeed(2, 0);
+  targetPos = encoderPosPlanter; // cancel any pending rotation
+}
+
+>>>>>>> e2490b00b95e1734a78b993fd4a60acf054791f3
 void triggerPlanterRotation() {
   targetPos += ticksFor60Degrees;
 }

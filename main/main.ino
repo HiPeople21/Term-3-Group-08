@@ -164,6 +164,7 @@ void loop() {
   static bool wasPreviouslyKilled = false;
   if (killed && !wasPreviouslyKilled) {
     stopTracks();
+    stopPlanter();
     wasPreviouslyKilled = true;
   } else if (!killed) {
     wasPreviouslyKilled = false;
@@ -182,8 +183,13 @@ void loop() {
   // RFID — triggers planter rotation when card detected
   checkRFID();
 
+<<<<<<< HEAD
   // Drive planter motor toward target position
   rotatePlanter();
+=======
+  // Drive planter motor toward target position (disabled when killed)
+  if (!killed) rotatePlanter();
+>>>>>>> e2490b00b95e1734a78b993fd4a60acf054791f3
 
   // Sensor readings — printed as fast as data arrives (TOF) or every 100ms (ultrasonic/IR)
   // readTOFSensors();

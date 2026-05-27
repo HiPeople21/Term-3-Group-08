@@ -120,6 +120,7 @@ float computePID(float position) {
 
 void runLineFollower() {
   uint16_t position = qtr.readLineBlack(sensorValues);
+  float correction = computePID(position);
 
   float correction = computePID(position);
 
@@ -188,7 +189,6 @@ void setup() {
   initMotors();
 
   mfrc522.PCD_Init();
-
   pinMode(LED_BUILTIN, OUTPUT);
 
   qtr.setTypeRC();
