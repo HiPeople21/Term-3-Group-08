@@ -124,7 +124,7 @@ void setup() {
   while (!Serial && millis() < 3000);
 
   Wire1.begin();
-  // initMotors();
+  initMotors();
   Serial.println("[Motors] Ready.");
 
   pinMode(LED_RED_PIN,   OUTPUT);
@@ -162,13 +162,13 @@ void loop() {
   }
 
   // Serial motor control — gated on enabled state
-  // if (isDisabled || !Serial.available()) return;
+  if (isDisabled || !Serial.available()) return;
 
-  // char cmd = Serial.read();
-  // if      (cmd == 'w' || cmd == 'W') { setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  Serial.println("Forward"); }
-  // else if (cmd == 's' || cmd == 'S') { setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); Serial.println("Reverse"); }
-  // else if (cmd == 'a' || cmd == 'A') { setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); Serial.println("Left"); }
-  // else if (cmd == 'd' || cmd == 'D') { setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  Serial.println("Right"); }
-  // else if (cmd == 'x' || cmd == 'X') { stopTracks(); seqRunning = false;                      Serial.println("Stop"); }
-  // else if (cmd == 'z' || cmd == 'Z') { startSequence();                                        Serial.println("Sequence started"); }
+  char cmd = Serial.read();
+  if      (cmd == 'w' || cmd == 'W') { setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  Serial.println("Forward"); }
+  else if (cmd == 's' || cmd == 'S') { setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); Serial.println("Reverse"); }
+  else if (cmd == 'a' || cmd == 'A') { setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); Serial.println("Left"); }
+  else if (cmd == 'd' || cmd == 'D') { setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  Serial.println("Right"); }
+  else if (cmd == 'x' || cmd == 'X') { stopTracks(); seqRunning = false;                      Serial.println("Stop"); }
+  else if (cmd == 'z' || cmd == 'Z') { startSequence();                                        Serial.println("Sequence started"); }
 }
