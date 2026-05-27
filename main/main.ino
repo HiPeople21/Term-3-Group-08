@@ -207,8 +207,17 @@ void loop() {
   // RFID — triggers planter rotation when card detected
   // checkRFID();
 
+<<<<<<< HEAD
+  // Drive planter motor toward target position
+  rotatePlanter();
+=======
   // Drive planter motor toward target position (disabled when killed)
+<<<<<<< HEAD
   // if (!killed) rotatePlanter();
+=======
+  if (!killed) rotatePlanter();
+>>>>>>> e2490b00b95e1734a78b993fd4a60acf054791f3
+>>>>>>> 6628e068e92065f96dc18ecffbde3892c104b968
 
   // Sensor readings — printed as fast as data arrives (TOF) or every 100ms (ultrasonic/IR)
   // readTOFSensors();

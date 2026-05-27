@@ -12,11 +12,15 @@ void initMotors() {
 }
 
 void setRightTrack(int speed) {
-  mc.setSpeed(1, -speed);
+  mc.setSpeed(1, speed);
 }
 
 void setLeftTrack(int speed) {
   mc.setSpeed(3, speed);
+}
+
+void setPlanter(int speed) {
+  mc.setSpeed(2, speed);
 }
 
 void stopTracks() {
