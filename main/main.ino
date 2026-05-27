@@ -112,31 +112,31 @@ void setup() {
   while (!Serial && millis() < 3000);
 
   // I2C for RFID + motors
-  Wire1.begin();
+  // Wire1.begin();
 
   // RFID reader
-  mfrc522.PCD_Init();
+  // mfrc522.PCD_Init();
   Serial.println("[RFID] Reader ready.");
 
   // Motor shield (Wire1, address 0x12)
-  initMotors();
+  // initMotors();
   Serial.println("[Motors] Ready.");
 
   // TOF sensors (Serial1 + Serial4) and ultrasonic (pins 44/42)
-  initSensors();
+  // initSensors();
   Serial.println("[Sensors] TOF + Ultrasonic ready.");
 
   // IR array (QTR 12-sensor, ~10s calibration)
-  initIRArray();
+  // initIRArray();
   Serial.println("[IR] Ready.");
 
   // Kill switch LED + button
-  pinMode(LED_RED_PIN,      OUTPUT);
-  pinMode(LED_GREEN_PIN,    OUTPUT);
-  pinMode(KILL_BUTTON_PIN,  INPUT_PULLUP);
-  pinMode(REVIVE_BUTTON_PIN, INPUT_PULLUP);
-  digitalWrite(LED_RED_PIN,   LOW);
-  digitalWrite(LED_GREEN_PIN, HIGH);
+  // pinMode(LED_RED_PIN,      OUTPUT);
+  // pinMode(LED_GREEN_PIN,    OUTPUT);
+  // pinMode(KILL_BUTTON_PIN,  INPUT_PULLUP);
+  // pinMode(REVIVE_BUTTON_PIN, INPUT_PULLUP);
+  // digitalWrite(LED_RED_PIN,   LOW);
+  // digitalWrite(LED_GREEN_PIN, HIGH);
   Serial.println("[Kill Switch] Hardware ready.");
 
   // WiFi kill switch
@@ -144,6 +144,9 @@ void setup() {
 
   Serial.println("=== SYSTEM ONLINE ===");
   Serial.println("Tracks: W/S/A/D = Fwd/Rev/Left/Right | X = Stop");
+
+  setupGrid();
+  register_bot();
 }
 
 void loop() {
@@ -151,40 +154,61 @@ void loop() {
   loopWifi();
 
   // Mechanical kill switch button
-  checkKillButton();
+  // checkKillButton();
 
   // Revival button (pin 48)
-  checkReviveButton();
+  // checkReviveButton();
 
   // LED reflects combined kill state
-  updateLED();
+  // updateLED();
 
   // Stop motors whenever system is killed
   bool killed = isKilledLocal || !isSystemEnabled();
   static bool wasPreviouslyKilled = false;
   if (killed && !wasPreviouslyKilled) {
-    stopTracks();
-    stopPlanter();
+    // stopTracks();
+    // stopPlanter();
     wasPreviouslyKilled = true;
   } else if (!killed) {
     wasPreviouslyKilled = false;
   }
-
+  // Serial.print(isKilledLocal);
+  // Serial.print(" ");
+  // Serial.println(isSystemEnabled());
+  // Serial.println(killed);
   // Serial track control (disabled when killed)
   if (!killed && Serial.available() > 0) {
     char cmd = Serial.read();
-    if      (cmd == 'w' || cmd == 'W') { setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  }
-    else if (cmd == 's' || cmd == 'S') { setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
-    else if (cmd == 'a' || cmd == 'A') { setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); }
-    else if (cmd == 'd' || cmd == 'D') { setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  }
-    else if (cmd == 'x' || cmd == 'X') { stopTracks(); }
+    if      (cmd == 'w' || cmd == 'W') {Serial.println("Executed w"); setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  }
+    else if (cmd == 's' || cmd == 'S') {Serial.println("Executed a"); setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
+    else if (cmd == 'a' || cmd == 'A') {Serial.println("Executed s"); setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); }
+    else if (cmd == 'd' || cmd == 'D') {Serial.println("Executed d"); setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  }
+    else if (cmd == 'x' || cmd == 'X') {Serial.println("Executed x"); stopTracks(); }
+    else if (cmd == '1')               { Serial.println("Executed 1"); openAirlockA(); }
+    else if (cmd == '2')               { Serial.println("Executed 2"); openAirlockB(); }
+    
+    // Safely handling multi-part commands with parseInt
+    else if (cmd == '3') { 
+      Serial.println("Executed 3");
+      int index = Serial.parseInt(); // Waits for and reads the next actual number
+      // Serial.println(UIDs[index]);
+
+      seedPlanted(UIDs[index]); 
+    }
+    else if (cmd == '4') { 
+      Serial.println("Executed 4");
+      int index = Serial.parseInt(); // Waits for and reads the next actual number
+      // Serial.println(UIDs[index]);
+      checkFertility(UIDs[index]); 
+    }
+
   }
 
   // RFID — triggers planter rotation when card detected
-  checkRFID();
+  // checkRFID();
 
   // Drive planter motor toward target position (disabled when killed)
-  if (!killed) rotatePlanter();
+  // if (!killed) rotatePlanter();
 
   // Sensor readings — printed as fast as data arrives (TOF) or every 100ms (ultrasonic/IR)
   // readTOFSensors();

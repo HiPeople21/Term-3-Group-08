@@ -2,12 +2,12 @@
 #include <Wire.h>
 #include <Motoron.h>
 
-#define M1A 41
-#define M1B 43
+#define M1A 43
+#define M1B 41
 #define M2A 47
 #define M2B 45
-#define M3A 49
-#define M3B 51
+#define M3A 51
+#define M3B 49
 
 #define ENCODER_A M2A
 #define ENCODER_B M2B
@@ -20,12 +20,18 @@ long targetPos = 0;
 float countsPerRevolution = 1400.0;
 long ticksFor60Degrees = countsPerRevolution / 6; // 250 ticks
 int planterLinearspeed = 600;
+int tracksDistance = 170; // 170 mm
+float wheelDiameter = 38.5;
+float wheelCircumference = wheelDiameter*PI;
+float irToHole = 116.5;
+
+float revolutionsFromIRToHole = irToHole / wheelDiameter * 1400;
 // m1 = right track
 // m2 = planter
 // m3 = left track
 
-void updateEncoder() {
-  if (digitalRead(ENCODER_A) == digitalRead(ENCODER_B)) {
+void updateEncoder(int encoder_a, int encoder_b) {
+  if (digitalRead(encoder_a) == digitalRead(encoder_b)) {
     encoderPosPlanter++;
   } else {
     encoderPosPlanter--;
@@ -40,7 +46,9 @@ void initMotors() {
 
   pinMode(ENCODER_A, INPUT_PULLUP);
   pinMode(ENCODER_B, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ENCODER_A), updateEncoder, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A), [](){
+    updateEncoder(ENCODER_A, ENCODER_B);
+  }, CHANGE);
 }
 
 void setRightTrack(int speed) {
