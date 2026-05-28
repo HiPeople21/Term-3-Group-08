@@ -132,11 +132,11 @@ void seedPlanted(String tagId) {
   messenger.sendToBoard("server", reg);
   // Serial.println(reg);
 
-  for (auto& tile : grid) {
-    if (tile.second["UID"].equalsIgnoreCase(tagId)) {
-      tile.second["planted"] = "true";
-    }
-  }
+  // for (auto& tile : grid) {
+  //   if (tile.second["UID"].equalsIgnoreCase(tagId)) {
+  //     tile.second["planted"] = "true";
+  //   }
+  // }
 }
 
 void openAirlockA() {
