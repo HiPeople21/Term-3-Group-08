@@ -90,7 +90,6 @@ void loop() {
      
       float correction = (Kp * error) + (Ki * integral) + (Kd * derivative);
       
-    ---
      
       if (abs(error) > 5.0) {
         if (correction > 0) correction += DEADBAND_PWM;

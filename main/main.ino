@@ -312,8 +312,8 @@ void loop() {
       else if (cmd == 's' || cmd == 'S') { Serial.println("Executed s"); setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
       else if (cmd == 'a' || cmd == 'A') { Serial.println("Executed a"); setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); }
       else if (cmd == 'd' || cmd == 'D') { Serial.println("Executed d"); setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  }
-      else if (cmd == '1')               { Serial.println("Executed 1"); openAirlockA(); }
-      else if (cmd == '2')               { Serial.println("Executed 2"); openAirlockB(); }
+      // else if (cmd == '1')               { Serial.println("Executed 1"); openAirlock(); }
+      // else if (cmd == '2')               { Serial.println("Executed 2"); openAirlock(); }
       else if (cmd == '3') {
         Serial.println("Executed 3");
         int index = Serial.parseInt();
