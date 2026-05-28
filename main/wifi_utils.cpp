@@ -109,6 +109,12 @@ void setupGrid() {
   }
 }
 
+static void (*fertilityCallback)(bool) = nullptr;
+
+void setFertilityCallback(void (*cb)(bool fertile)) {
+  fertilityCallback = cb;
+}
+
 bool isSystemEnabled() {
   return systemEnabled;
 }
@@ -126,7 +132,7 @@ void seedPlanted(String tagId) {
   messenger.sendToBoard("server", reg);
   // Serial.println(reg);
 
-  for (auto tile : grid) {
+  for (auto& tile : grid) {
     if (tile.second["UID"].equalsIgnoreCase(tagId)) {
       tile.second["planted"] = "true";
     }
@@ -205,11 +211,7 @@ static void onMessage(const MessageMetadata& metadata, const uint8_t* payload, s
     
   } else if (commandType == "isFertileReply") {
     String fertile = commandMap["fertile"];
-    if (fertile.equalsIgnoreCase("true")) {
-
-    } else if (fertile.equalsIgnoreCase("false")) {
-      
-    }
+    if (fertilityCallback) fertilityCallback(fertile.equalsIgnoreCase("true"));
     // Serial.println(msg);
 
   } else if (commandType == "heartbeat") {
