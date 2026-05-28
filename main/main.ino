@@ -65,12 +65,25 @@ long planterTarget = 0;
 unsigned long irDetectedAt     = 0;
 unsigned long plantingStartedAt = 0;
 
+enum Stage {
+  BASE,
+  LINED,
+  BLANK,
+  RETURNING
+};
+
+Stage stage = BASE; 
+
 enum State {
   FOLLOWING,
   WAITING_FOR_RFID,
   DRIVING_TO_HOLE,
   PLANTING,
-  JUNCTION_HANDLING
+  JUNCTION_HANDLING,
+  OPENING,
+  CLOSING,
+  WALL_FOLLOWING,
+  
 };
 
 State state = FOLLOWING;
@@ -308,96 +321,108 @@ void loop() {
 
   if (running && !killed) {
     Serial.println(state);
-    switch (state) {
+    switch (stage){
+      case BASE:
 
-      case FOLLOWING: {
-        runLineFollower();
-
-        if (checkForHole()) {
-          irDetectedAt = millis();
-          encoderAtIR  = getTrackEncoder();
-          state = WAITING_FOR_RFID;
-          Serial.println("Hole detected");
-          break;
-        } else if (isJunction()) {
-          stopTracks();
-          state = JUNCTION_HANDLING;
-          Serial.println("Junction detected");
-          break;
-        } else {
-          Serial.print("Following Line, not at junction");
-          break;
-        }
-      }
-
-      case JUNCTION_HANDLING: {
-        driveStraight(600 * 6 / 7.2);
-        delay(200);
-        stopTracks();
-
-        lastJunctionTick = getTrackEncoder();
-        resetPID();
-
-        state = FOLLOWING;
-        Serial.println("Junction cleared");
         break;
-      }
+      case BLANK:
+        break;
+      case RETURNING:
+        break;
 
-      case WAITING_FOR_RFID: {
-        if (isJunction()) {
-          driveStraight(600 * 6 / 7.2);
-          Serial.println("going straight to rfid");
-        } else {
-          runLineFollower();
-        }
+      case LINED:
+        switch (state) {
 
-        if (millis() - irDetectedAt > IR_WINDOW_MS) {
-          state = FOLLOWING;
-          Serial.println("RFID timeout, false positive ir detection");
-          break;
-        }
+          case FOLLOWING: {
+            runLineFollower();
 
-        if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
-          mfrc522.PICC_HaltA();
-          mfrc522.PCD_StopCrypto1();
-          state = DRIVING_TO_HOLE;
-          Serial.println("RFID confirmed");
+            if (checkForHole()) {
+              irDetectedAt = millis();
+              encoderAtIR  = getTrackEncoder();
+              state = WAITING_FOR_RFID;
+              Serial.println("Hole detected");
+              break;
+            } else if (isJunction()) {
+              stopTracks();
+              state = JUNCTION_HANDLING;
+              Serial.println("Junction detected");
+              break;
+            } else {
+              Serial.print("Following Line, not at junction");
+              break;
+            }
+          }
+
+          case JUNCTION_HANDLING: {
+            driveStraight(600 * 6 / 7.2);
+            delay(200);
+            stopTracks();
+
+            lastJunctionTick = getTrackEncoder();
+            resetPID();
+
+            state = FOLLOWING;
+            Serial.println("Junction cleared");
+            break;
+          }
+
+          case WAITING_FOR_RFID: {
+            if (isJunction()) {
+              driveStraight(600 * 6 / 7.2);
+              Serial.println("going straight to rfid");
+            } else {
+              runLineFollower();
+            }
+
+            if (millis() - irDetectedAt > IR_WINDOW_MS) {
+              state = FOLLOWING;
+              Serial.println("RFID timeout, false positive ir detection");
+              break;
+            }
+
+            if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+              mfrc522.PICC_HaltA();
+              mfrc522.PCD_StopCrypto1();
+              state = DRIVING_TO_HOLE;
+              Serial.println("RFID confirmed");
+            }
+            break;
+          }
+
+          case DRIVING_TO_HOLE: {
+            long currentTicks = getTrackEncoder();
+            long tickTarget   = encoderAtIR + ticksToHole;
+            long encerror     = tickTarget - currentTicks;
+
+            if (encerror > 5) {
+              driveStraight(600 * 6 / 7.2);
+              Serial.print("going straight to hole");
+            } else {
+              stopTracks();
+              planterTarget    = getPlanterEncoder() + ticksToPlant;
+              plantingStartedAt = millis();
+              state = PLANTING;
+              Serial.println("At planting position");
+            }
+            break;
+          }
+
+          case PLANTING: {
+            long planterPos = getPlanterEncoder();
+
+            if (abs(planterPos - planterTarget) > 5) {
+              setPlanter(500 * 6 / 7.2);
+            } else {
+              setPlanter(0);
+              delay(500);
+              resetPID();
+              state = FOLLOWING;
+              Serial.println("Plant complete");
+            }
+            break;
+          }
         }
         break;
-      }
-
-      case DRIVING_TO_HOLE: {
-        long currentTicks = getTrackEncoder();
-        long tickTarget   = encoderAtIR + ticksToHole;
-        long encerror     = tickTarget - currentTicks;
-
-        if (encerror > 5) {
-          driveStraight(600 * 6 / 7.2);
-          Serial.print("going straight to hole");
-        } else {
-          stopTracks();
-          planterTarget    = getPlanterEncoder() + ticksToPlant;
-          plantingStartedAt = millis();
-          state = PLANTING;
-          Serial.println("At planting position");
-        }
-        break;
-      }
-
-      case PLANTING: {
-        long planterPos = getPlanterEncoder();
-
-        if (abs(planterPos - planterTarget) > 5) {
-          setPlanter(500 * 6 / 7.2);
-        } else {
-          setPlanter(0);
-          delay(500);
-          resetPID();
-          state = FOLLOWING;
-          Serial.println("Plant complete");
-        }
-        break;
-      }
     }
   } else if (!killed) {
     // Drive planter motor toward target position (manual mode)
