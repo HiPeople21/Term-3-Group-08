@@ -1,7 +1,7 @@
 #include <Wire.h>
 #include "motors.h"
 
-static const int trackSpeed = 800;
+static const int trackSpeed = 600;
 
 void setup() {
   Serial.begin(115200);
@@ -30,12 +30,12 @@ void loop() {
 void playSequence() {
   for (int i = 0; i < 10; i++) {
     setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);
-    delay(1500);
+    delay(2500);w
     setRightTrack(-trackSpeed);  setLeftTrack(-trackSpeed);
-    delay(1500);
+    delay(2500);
     setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed);
-    delay(1500);
+    delay(2500);
     setRightTrack(-trackSpeed);  setLeftTrack(trackSpeed);
-    delay(1500);
+    delay(2500);
   }
 }
