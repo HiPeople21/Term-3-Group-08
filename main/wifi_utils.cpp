@@ -192,10 +192,20 @@ static void onMessage(const MessageMetadata& metadata, const uint8_t* payload, s
   Serial.println(msg);
 
   if (length == 6) {
-    if (payload[0] == 1);
-      // bool flag = payload[5];
-      // if (flag == 1) Serial.println("Base Re-entry Requested!");
-      return;
+    if (payload[0] == 1) {
+      Serial.println("queueExit Requested!");
+    } else if (payload[1] == 1) {
+      Serial.println("airlockBBusy Requested!");
+    } else if (payload[2] == 1) {
+      Serial.println("queueEnter Requested!");
+    } else if (payload[3] == 1) {
+      Serial.println("airlockABusy Requested!");
+    } else if (payload[4] == 1) {
+      Serial.println("emergency Requested!");
+    } else if (payload[5] == 1) {
+      Serial.println("Base Re-entry Requested!");
+    }
+    return;
   }
   
   // 2. Check for Occupancy Map
