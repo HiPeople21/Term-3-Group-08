@@ -250,9 +250,9 @@ void loopWifi() {
     register_bot();
   }
 
-  // if (systemEnabled && (millis() - lastHeartbeatMs > HEARTBEAT_TIMEOUT_MS)) {
-  //   systemEnabled = false;
-  //   Serial.println("[WiFi] Heartbeat Timeout (Server Connection Lost)");
-  // }
+  if (systemEnabled && (millis() - lastHeartbeatMs > HEARTBEAT_TIMEOUT_MS)) {
+    systemEnabled = false;
+    Serial.println("[WiFi] Heartbeat Timeout (Server Connection Lost)");
+  }
 
 }
