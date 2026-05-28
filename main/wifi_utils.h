@@ -12,3 +12,4 @@ void seedPlanted(String tagId);
 void openAirlockA();
 void openAirlockB();
 void register_bot();
+void setFertilityCallback(void (*cb)(bool fertile));
