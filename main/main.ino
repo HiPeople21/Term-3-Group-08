@@ -47,6 +47,7 @@ const long ticksToHole  = 1355;
 const long ticksToPlant = 233;
 
 const unsigned long IR_WINDOW_MS = 1000;
+const unsigned long FERTILITY_TIMEOUT_MS = 5000;
 
 const long junctionCooldownTicks = 200;
 long lastJunctionTick = -9999;
@@ -62,8 +63,11 @@ int prevMiddleValue = 0;
 long encoderAtIR   = 0;
 long planterTarget = 0;
 
-unsigned long irDetectedAt     = 0;
-unsigned long plantingStartedAt = 0;
+unsigned long irDetectedAt        = 0;
+unsigned long plantingStartedAt   = 0;
+unsigned long fertilityRequestedAt = 0;
+
+String detectedUID = "";
 
 enum Stage {
   BASE,
@@ -83,7 +87,7 @@ enum State {
   OPENING,
   CLOSING,
   WALL_FOLLOWING,
-  
+  WAITING_FOR_FERTILITY
 };
 
 State state = FOLLOWING;
@@ -234,7 +238,7 @@ void setup() {
   Serial.println("[Motors] Ready.");
 
   // TOF sensors (Serial1 + Serial4) and ultrasonic (pins 44/42)
-  // initSensors();
+  initSensors();
   Serial.println("[Sensors] TOF + Ultrasonic ready.");
 
   // IR array (QTR 12-sensor, ~10s calibration)
@@ -242,12 +246,12 @@ void setup() {
   Serial.println("[IR] Ready.");
 
   // Kill switch LED + button
-  // pinMode(LED_RED_PIN,      OUTPUT);
-  // pinMode(LED_GREEN_PIN,    OUTPUT);
-  // pinMode(KILL_BUTTON_PIN,  INPUT_PULLUP);
-  // pinMode(REVIVE_BUTTON_PIN, INPUT_PULLUP);
-  // digitalWrite(LED_RED_PIN,   LOW);
-  // digitalWrite(LED_GREEN_PIN, HIGH);
+  pinMode(LED_RED_PIN,      OUTPUT);
+  pinMode(LED_GREEN_PIN,    OUTPUT);
+  pinMode(KILL_BUTTON_PIN,  INPUT_PULLUP);
+  pinMode(REVIVE_BUTTON_PIN, INPUT_PULLUP);
+  digitalWrite(LED_RED_PIN,   LOW);
+  digitalWrite(LED_GREEN_PIN, HIGH);
   Serial.println("[Kill Switch] Hardware ready.");
 
   // WiFi kill switch
@@ -258,6 +262,13 @@ void setup() {
 
   setupGrid();
   register_bot();
+
+  setFertilityCallback([](bool fertile) {
+    if (state == WAITING_FOR_FERTILITY) {
+      if (fertile) state = DRIVING_TO_HOLE;
+      else state = FOLLOWING;
+    }
+  });
 }
 
 void loop() {
@@ -265,13 +276,13 @@ void loop() {
   loopWifi();
 
   // Mechanical kill switch button
-  // checkKillButton();
+  checkKillButton();
 
   // Revival button (pin 48)
-  // checkReviveButton();
+  checkReviveButton();
 
   // LED reflects combined kill state
-  // updateLED();
+  updateLED();
 
   // Stop motors whenever system is killed
   bool killed = isKilledLocal || !isSystemEnabled();
@@ -330,7 +341,7 @@ void loop() {
       case RETURNING:
         break;
 
-      case LINED:
+      case LINED: {
         switch (state) {
 
           case FOLLOWING: {
@@ -381,9 +392,20 @@ void loop() {
             }
 
             if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+              detectedUID = "";
+              for (byte i = 0; i < mfrc522.uid.size; i++) {
+                if (mfrc522.uid.uidByte[i] < 0x10) detectedUID += "0";
+                detectedUID += String(mfrc522.uid.uidByte[i], HEX);
+              }
+              detectedUID.toUpperCase();
+
               mfrc522.PICC_HaltA();
               mfrc522.PCD_StopCrypto1();
-              state = DRIVING_TO_HOLE;
+              stopTracks();
+
+              checkFertility(detectedUID);
+              fertilityRequestedAt = millis();
+              state = WAITING_FOR_FERTILITY;
               Serial.println("RFID confirmed");
             }
             break;
@@ -421,8 +443,19 @@ void loop() {
             }
             break;
           }
+
+          case WAITING_FOR_FERTILITY: {
+            stopTracks();
+            if (millis() - fertilityRequestedAt > FERTILITY_TIMEOUT_MS) {
+              state = FOLLOWING;
+              Serial.println("Fertility timeout, skipping hole");
+            }
+            break;
+          }
         }
         break;
+      }
+      break;
     }
   } else if (!killed) {
     // Drive planter motor toward target position (manual mode)
