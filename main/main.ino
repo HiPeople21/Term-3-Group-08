@@ -327,34 +327,33 @@ void loop() {
 
   if (!killed) {
     // char cmd = Serial.read();
-
-    // if (cmd == 'g' || cmd == 'G') {
-    running = true;
-    //   resetPID();
-    //   state = FOLLOWING;
-    //   Serial.println("Running");
-    // } else if (cmd == 'x' || cmd == 'X') {
-    //   running = false;
-    //   stopTracks();
-    //   Serial.println("Stopped");
-    // } else if (!running) {
-    //   if      (cmd == 'w' || cmd == 'W') { Serial.println("Executed w"); setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  }
-    //   else if (cmd == 's' || cmd == 'S') { Serial.println("Executed s"); setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
-    //   else if (cmd == 'a' || cmd == 'A') { Serial.println("Executed a"); setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); }
-    //   else if (cmd == 'd' || cmd == 'D') { Serial.println("Executed d"); setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  }
-    //   else if (cmd == '1')               { Serial.println("Executed 1"); openAirlockA(); }
-    //   else if (cmd == '2')               { Serial.println("Executed 2"); openAirlockB(); }
-    //   else if (cmd == '3') {
-    //     Serial.println("Executed 3");
-    //     int index = Serial.parseInt();
-    //     seedPlanted(UIDs[index]);
-    //   }
-    //   else if (cmd == '4') {
-    //     Serial.println("Executed 4");
-    //     int index = Serial.parseInt();
-    //     checkFertility(UIDs[index]);
-    //   }
-    // }
+    if (cmd == 'g' || cmd == 'G') {
+      running = true;
+      resetPID();
+      state = FOLLOWING;
+      Serial.println("Running");
+    } else if (cmd == 'x' || cmd == 'X') {
+      running = false;
+      stopTracks();
+      Serial.println("Stopped");
+    } else if (!running) {
+      if      (cmd == 'w' || cmd == 'W') { Serial.println("Executed w"); setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  }
+      else if (cmd == 's' || cmd == 'S') { Serial.println("Executed s"); setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
+      else if (cmd == 'a' || cmd == 'A') { Serial.println("Executed a"); setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); }
+      else if (cmd == 'd' || cmd == 'D') { Serial.println("Executed d"); setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  }
+      // else if (cmd == '1')               { Serial.println("Executed 1"); openAirlock(); }
+      // else if (cmd == '2')               { Serial.println("Executed 2"); openAirlock(); }
+      else if (cmd == '3') {
+        Serial.println("Executed 3");
+        int index = Serial.parseInt();
+        seedPlanted(UIDs[index]);
+      }
+      else if (cmd == '4') {
+        Serial.println("Executed 4");
+        int index = Serial.parseInt();
+        checkFertility(UIDs[index]);
+      }
+    }
   }
 
   // RFID — triggers planter rotation when card detected (manual mode only)

@@ -139,18 +139,24 @@ void seedPlanted(String tagId) {
   // }
 }
 
-void openAirlockA() {
+void openAirlock(String tagId, char airlock) {
   char reg[64];
-  snprintf(reg, sizeof(reg), "type=openAirlockA board_id=%s", BoardId);
+  snprintf(reg, sizeof(reg), "type=openAirlock airlock=%c tag_id=%s board_id=%s", airlock, tagId.c_str(), BoardId);
   messenger.sendToBoard("server", reg);
 }	
 
-void openAirlockB() {
+void reviveRequest(int target_team, String target_board) {
   char reg[64];
-  snprintf(reg, sizeof(reg), "type=openAirlockB board_id=%s", BoardId);
+  snprintf(reg, sizeof(reg), "type=reviveRequest target_team=%d target_board=%s", target_team, target_board.c_str());
   messenger.sendToBoard("server", reg);
-}	
+}
 
+
+void getMap() {
+  char reg[64];
+  snprintf(reg, sizeof(reg), "type=getMap board_id=%s", BoardId);
+  messenger.sendToBoard("server", reg);
+}
 
 void register_bot() {
   lastRegisterMs = millis();
@@ -184,6 +190,30 @@ static void onMessage(const MessageMetadata& metadata, const uint8_t* payload, s
   Serial.print(metadata.fromBoardId);
   Serial.print(": ");
   Serial.println(msg);
+
+  if (length == 6) {
+    if (payload[0] == 1) {
+      Serial.println("queueExit Requested!");
+    } else if (payload[1] == 1) {
+      Serial.println("airlockBBusy Requested!");
+    } else if (payload[2] == 1) {
+      Serial.println("queueEnter Requested!");
+    } else if (payload[3] == 1) {
+      Serial.println("airlockABusy Requested!");
+    } else if (payload[4] == 1) {
+      Serial.println("emergency Requested!");
+    } else if (payload[5] == 1) {
+      Serial.println("Base Re-entry Requested!");
+    }
+    return;
+  }
+  
+  // 2. Check for Occupancy Map
+  if (length == 21) {
+      // ... handle map
+      return;
+  }
+
 
   auto commandMap = parseToMap(msg);
 
@@ -226,8 +256,12 @@ static void onMessage(const MessageMetadata& metadata, const uint8_t* payload, s
   } else if (commandType == "openAirlockReply") {
     // Serial.println(msg);
     
-  } else if (commandType == "openAirlock") {
-
+  } else if (commandType == "distress") {
+    // Serial.println(msg);
+    
+  } else if (commandType == "reviveReply") {
+    // Serial.println(msg);
+    
   } else {
     Serial.print("Unknown command: ");
     Serial.println(msg);
@@ -250,9 +284,9 @@ void loopWifi() {
     register_bot();
   }
 
-  // if (systemEnabled && (millis() - lastHeartbeatMs > HEARTBEAT_TIMEOUT_MS)) {
-  //   systemEnabled = false;
-  //   Serial.println("[WiFi] Heartbeat Timeout (Server Connection Lost)");
-  // }
+  if (systemEnabled && (millis() - lastHeartbeatMs > HEARTBEAT_TIMEOUT_MS)) {
+    systemEnabled = false;
+    Serial.println("[WiFi] Heartbeat Timeout (Server Connection Lost)");
+  }
 
 }
