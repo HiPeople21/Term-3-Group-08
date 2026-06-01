@@ -21,7 +21,7 @@ const int TARGET_DISTANCE_MM = 100;
 const int BASE_PWM = 550; 
 const int DEADBAND_PWM = 60; 
 
-float Kp = 3.0; 
+float Kp = 2.5; 
 float Ki = 0.0; 
 float Kd = 2; 
 
@@ -43,8 +43,14 @@ float getFrontDistance() {
 }
 
 void setup() {
+  // 1. 初始化串口，但删除了死等 USB 连接的代码
   Serial.begin(115200); 
-  while (!Serial && millis() < 3000); 
+  
+  // ==========================================
+  // 【核心修复 1：硬件启动稳压延迟】
+  // 纯电池供电上电时，给降压模块和主控板电容 2 秒钟时间稳定电压
+  delay(2000); 
+  // ==========================================
   
   pinMode(TRIG_FRONT, OUTPUT);
   pinMode(ECHO_FRONT, INPUT);
@@ -52,10 +58,20 @@ void setup() {
   Serial1.begin(921600); 
   Serial4.begin(921600); 
   Wire1.begin();
+  
+  // ==========================================
+  // 【核心修复 2：防止电机初始化瞬间抽取大电流锁死 I2C】
+  delay(500); 
+  // ==========================================
   initMotors(); 
   
-  Serial.println("--- Crawler SMART PID + AUTO-RESUME Ready ---");
-  Serial.println("Send 'g' to start, 'x' to stop.");
+  if (Serial) {
+    Serial.println("--- Crawler SMART PID + AUTO-RESUME Ready ---");
+    Serial.println("System starting in AUTO mode...");
+  }
+  
+  // 硬件全部就绪且电压稳定后，再允许系统运行
+  isRunning = true;
   lastControlTime = millis();
 }
 
@@ -94,8 +110,8 @@ void loop() {
       return;
     }
 
-    bool seeRightWall = (sensor2.current_distance > 0 && sensor2.current_distance < 300 && (currentTime - sensor2.last_update_time < 100));
-    bool seeLeftWall = (sensor1.current_distance > 0 && sensor1.current_distance < 300 && (currentTime - sensor1.last_update_time < 100));
+    bool seeRightWall = (sensor2.current_distance > 0 && sensor2.current_distance < 500 && (currentTime - sensor2.last_update_time < 100));
+    bool seeLeftWall = (sensor1.current_distance > 0 && sensor1.current_distance < 500 && (currentTime - sensor1.last_update_time < 100));
 
     static float smoothedRight = TARGET_DISTANCE_MM;
     static float smoothedLeft = TARGET_DISTANCE_MM;
@@ -169,12 +185,14 @@ void loop() {
     
     setLeftTrack(cmdLeft);
     setRightTrack(cmdRight);
-
-    Serial.print(followingRight ? "Wall:RIGHT" : "Wall:LEFT");
-    Serial.print(", Front:"); Serial.print(frontDist_cm);
-    Serial.print("cm, Dist:"); Serial.print(followingRight ? smoothedRight : smoothedLeft);
-    Serial.print("mm, L_PWM:"); Serial.print(cmdLeft);
-    Serial.print(", R_PWM:"); Serial.println(cmdRight);
+    
+    if (Serial){
+      Serial.print(followingRight ? "Wall:RIGHT" : "Wall:LEFT");
+      Serial.print(", Front:"); Serial.print(frontDist_cm);
+      Serial.print("cm, Dist:"); Serial.print(followingRight ? smoothedRight : smoothedLeft);
+      Serial.print("mm, L_PWM:"); Serial.print(cmdLeft);
+      Serial.print(", R_PWM:"); Serial.println(cmdRight);
+    }
     
     prevError = error;
     lastControlTime = currentTime;
