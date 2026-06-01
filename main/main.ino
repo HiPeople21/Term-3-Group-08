@@ -33,6 +33,7 @@ static unsigned long lastReviveDebounce = 0;
 // --- Motor speed (manual control) ---
 static const int trackSpeed = 800 * 6 / 7.2;
 
+
 // --- Line Following / State Machine ---
 float Kp = 1.0;
 float Ki = 0.0;
@@ -63,6 +64,7 @@ int prevMiddleValue = 0;
 long encoderAtIR   = 0;
 long planterTarget = 0;
 
+
 unsigned long irDetectedAt        = 0;
 unsigned long plantingStartedAt   = 0;
 unsigned long fertilityRequestedAt = 0;
@@ -87,9 +89,11 @@ enum State {
   OPENING,
   CLOSING,
   WALL_FOLLOWING,
-  WAITING_FOR_FERTILITY
+  WAITING_FOR_FERTILITY,
+  TURNING
 };
 
+State turnReturnState = FOLLOWING;
 State state = FOLLOWING;
 
 // -----------------------------------------------------------------------
@@ -220,6 +224,12 @@ void driveStraight(int speed) {
   setRightTrack(speed);
 }
 
+void initTurn(float degrees, State returnState) {
+  turnReturnState = returnState;
+  startTurn(degrees);
+  state = TURNING;
+}
+
 // -----------------------------------------------------------------------
 
 void setup() {
@@ -296,7 +306,7 @@ void loop() {
   }
 
   if (!killed) {
-    // char cmd = Serial.read();
+    char cmd = Serial.read();
     if (cmd == 'g' || cmd == 'G') {
       running = true;
       resetPID();
@@ -309,8 +319,8 @@ void loop() {
     } else if (!running) {
       if      (cmd == 'w' || cmd == 'W') { Serial.println("Executed w"); setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  }
       else if (cmd == 's' || cmd == 'S') { Serial.println("Executed s"); setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
-      else if (cmd == 'a' || cmd == 'A') { Serial.println("Executed a"); setRightTrack(trackSpeed);  setLeftTrack(-trackSpeed); }
-      else if (cmd == 'd' || cmd == 'D') { Serial.println("Executed d"); setRightTrack(-trackSpeed); setLeftTrack(trackSpeed);  }
+      else if (cmd == 'a' || cmd == 'A') { Serial.println("Executed a"); initTurn(-90.0, FOLLOWING); }
+      else if (cmd == 'd' || cmd == 'D') { Serial.println("Executed d"); initTurn( 90.0, FOLLOWING); }
       // else if (cmd == '1')               { Serial.println("Executed 1"); openAirlock(); }
       // else if (cmd == '2')               { Serial.println("Executed 2"); openAirlock(); }
       else if (cmd == '3') {
@@ -328,6 +338,13 @@ void loop() {
 
   // RFID — triggers planter rotation when card detected (manual mode only)
   // checkRFID();
+
+  if (!killed && state == TURNING) {
+    if (updateTurn()) {
+      state = turnReturnState;
+      Serial.println("Turn complete");
+    }
+  }
 
   if (running && !killed) {
     // Serial.println(state);
@@ -453,6 +470,7 @@ void loop() {
             }
             break;
           }
+
         }
         break;
       }

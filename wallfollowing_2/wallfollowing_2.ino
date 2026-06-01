@@ -15,7 +15,7 @@ struct TOFSensor {
 TOFSensor sensor1 = {Serial1, "Sensor 1 (TX0)", {0}, 0, 0};
 TOFSensor sensor2 = {Serial4, "Sensor 2 (TX3)", {0}, 0, 0};
 
-bool isRunning = false; 
+bool isRunning = true; 
 
 const int TARGET_DISTANCE_MM = 100; 
 const int BASE_PWM = 550; 
@@ -60,20 +60,20 @@ void setup() {
 }
 
 void loop() {
-  if (Serial.available()) {
-    char cmd = Serial.read();
-    if (cmd == 'g' || cmd == 'G') {
-      isRunning = true;
-      integral = 0;
-      lastControlTime = millis();
-      Serial.println("[SYSTEM] RUNNING");
-    } 
-    else if (cmd == 'x' || cmd == 'X') {
-      isRunning = false;
-      stopTracks();
-      Serial.println("[SYSTEM] STOPPED");
-    }
-  }
+  // if (Serial.available()) {
+  //   char cmd = Serial.read();
+  //   if (cmd == 'g' || cmd == 'G') {
+  //     isRunning = true;
+  //     integral = 0;
+  //     lastControlTime = millis();
+  //     Serial.println("[SYSTEM] RUNNING");
+  //   } 
+  //   else if (cmd == 'x' || cmd == 'X') {
+  //     isRunning = false;
+  //     stopTracks();
+  //     Serial.println("[SYSTEM] STOPPED");
+  //   }
+  // }
 
   readTOFSensor(sensor1);
   readTOFSensor(sensor2);
@@ -81,53 +81,17 @@ void loop() {
   unsigned long currentTime = millis();
   float deltaTime = (currentTime - lastControlTime) / 1000.0; 
 
-  if (isRunning && deltaTime >= - 0.02) {
-    
+  if (isRunning && deltaTime >= 0.02) {
+
     float frontDist_cm = getFrontDistance();
-    
+
     if (frontDist_cm <= 10.0) {
-      stopTracks(); 
-      
+      stopTracks();
       integral = 0;
-      lastControlTime = currentTime; 
-      
-      integral += error * deltaTime;
-      integral = constrain(integral, -300, 300); // 积分上限限制在 300 PWM
-      
-     
-      float derivative = (error - prevError) / deltaTime;
-      
-     
-      float correction = (Kp * error) + (Ki * integral) + (Kd * derivative);
-      
-     
-      if (abs(error) > 5.0) {
-        if (correction > 0) correction += DEADBAND_PWM;
-        if (correction < 0) correction -= DEADBAND_PWM;
-      }
-
-      int cmdLeft = BASE_PWM + correction;
-      int cmdRight = BASE_PWM - correction;
-
-      // 限制在硬件安全范围内 (-800 到 800)
-      cmdLeft = constrain(cmdLeft, -(800 * 6 / 7.2), (800 * 6 / 7.2));
-      cmdRight = constrain(cmdRight, -(800 * 6 / 7.2), (800 * 6 / 7.2));
-      
-      setLeftTrack(cmdLeft);
-      setRightTrack(cmdRight);
-
-     
-      Serial.print("TargetDist:150"); 
-      Serial.print(", CurrentDist:"); Serial.print(sensor2.current_distance);
-      Serial.print(", LeftPWM:"); Serial.print(cmdLeft);
-      Serial.print(", RightPWM:"); Serial.println(cmdRight);
-      
-      prevError = error;
-    } 
-    else {
-      // 如果突然丢失 ToF 信号（比如被遮挡），短暂保持直行，防止乱转
-      setLeftTrack(BASE_PWM);
-      setRightTrack(BASE_PWM);
+      prevError = 0;
+      lastControlTime = currentTime;
+      Serial.println("[STOP] Front obstacle");
+      return;
     }
 
     bool seeRightWall = (sensor2.current_distance > 0 && sensor2.current_distance < 300 && (currentTime - sensor2.last_update_time < 100));
@@ -168,11 +132,19 @@ void loop() {
     }
 
     integral += error * deltaTime;
-    integral = constrain(integral, -300, 300); 
-    
+    integral = constrain(integral, -300, 300);
+
     float derivative = (error - prevError) / deltaTime;
     float correction = (Kp * error) + (Ki * integral) + (Kd * derivative);
-    
+
+    // Angled-approach gate: sensor reads "too far" (error > 0) but distance is
+    // actively decreasing (derivative < 0), meaning the robot is closing on the
+    // wall at an angle, not genuinely far from it. Cap correction so we don't
+    // steer further toward the wall.
+    if (error > 0.0f && derivative < 0.0f) {
+      correction = min(correction, 0.0f);
+    }
+
     if (abs(error) > 5.0) {
       if (correction > 0) correction += DEADBAND_PWM;
       if (correction < 0) correction -= DEADBAND_PWM;
@@ -189,8 +161,11 @@ void loop() {
       cmdRight = BASE_PWM + correction;
     }
 
-    cmdLeft = constrain(cmdLeft, -(800 * 6 / 7.2), (800 * 6 / 7.2));
-    cmdRight = constrain(cmdRight, -(800 * 6 / 7.2), (800 * 6 / 7.2));
+    // Floor at a minimum forward speed so neither track can reverse and
+    // pivot the robot into the wall.
+    const int MIN_FORWARD_PWM = 100;
+    cmdLeft = constrain(cmdLeft, MIN_FORWARD_PWM, (int)(800 * 6 / 7.2));
+    cmdRight = constrain(cmdRight, MIN_FORWARD_PWM, (int)(800 * 6 / 7.2));
     
     setLeftTrack(cmdLeft);
     setRightTrack(cmdRight);

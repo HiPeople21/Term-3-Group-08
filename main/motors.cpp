@@ -117,3 +117,38 @@ long getPlanterEncoder() {
   interrupts();
   return value;
 }
+
+static long turnStartTicks  = 0;
+static long turnTicksNeeded = 0;
+static int  turnDirSign     = 0;
+static const int turnSpeed  = (int)(800 * 6 / 7.2);
+
+void startTurn(float degrees) {
+  float arcLength = (tracksDistance / 2.0f) * abs(degrees) * PI / 180.0f * 4.75/4;
+  turnTicksNeeded = (long)(arcLength / wheelCircumference * countsPerRevolution);
+
+  noInterrupts();
+  turnStartTicks = encoderPosTrack;
+  interrupts();
+
+  turnDirSign = (degrees > 0) ? 1 : -1;
+  if (turnDirSign > 0) {   // right: right track back, left track forward
+    setRightTrack(-turnSpeed);
+    setLeftTrack(turnSpeed);
+  } else {                 // left: right track forward, left track back
+    setRightTrack(turnSpeed);
+    setLeftTrack(-turnSpeed);
+  }
+}
+
+bool updateTurn() {
+  noInterrupts();
+  long pos = encoderPosTrack;
+  interrupts();
+
+  if (abs(pos - turnStartTicks) >= turnTicksNeeded) {
+    stopTracks();
+    return true;
+  }
+  return false;
+}

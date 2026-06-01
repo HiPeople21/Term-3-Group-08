@@ -11,3 +11,8 @@ void rotatePlanter();
 void triggerPlanterRotation();
 long getTrackEncoder();
 long getPlanterEncoder();
+
+// Point-turn helpers — call startTurn() once, then updateTurn() every loop.
+// Positive degrees = right, negative = left.
+void startTurn(float degrees);
+bool updateTurn();
