@@ -1,6 +1,7 @@
 #include <Wire.h>
 #include "motors.h"
 
+// Ultrasonic pins
 #define TRIG_FRONT 44
 #define ECHO_FRONT 42
 
@@ -12,15 +13,19 @@ struct TOFSensor {
   unsigned long last_update_time; 
 };
 
+// sensor1 = Left, sensor2 = Right
 TOFSensor sensor1 = {Serial1, "Sensor 1 (TX0)", {0}, 0, 0};
 TOFSensor sensor2 = {Serial4, "Sensor 2 (TX3)", {0}, 0, 0};
 
+// System state
 bool isRunning = false; 
 
+// Control parameters
 const int TARGET_DISTANCE_MM = 150; 
 const int BASE_PWM = 550; 
 const int DEADBAND_PWM = 60; 
 
+// PID constants
 float Kp = 4.0; 
 float Ki = 0.0; 
 float Kd = 7.0; 
@@ -29,6 +34,7 @@ float integral = 0;
 float prevError = 0;
 unsigned long lastControlTime = 0;
 
+// Get front distance with timeout to prevent blocking
 float getFrontDistance() {
   digitalWrite(TRIG_FRONT, LOW);
   delayMicroseconds(2);
@@ -38,7 +44,7 @@ float getFrontDistance() {
   
   long duration = pulseIn(ECHO_FRONT, HIGH, 6000); 
   
-  if (duration == 0) return 999.0; 
+  if (duration == 0) return 999.0; // Timeout, path is clear
   return duration / 58.0;
 }
 
@@ -54,62 +60,67 @@ void setup() {
   Wire1.begin();
   initMotors(); 
   
-  Serial.println("--- Crawler SMART PID + AUTO-RESUME Ready ---");
-  Serial.println("Send 'g' to start, 'x' to stop.");
+  Serial.println("System Ready. Send 'g' to start, 'x' to stop.");
   lastControlTime = millis();
 }
 
 void loop() {
+  // Handle serial commands
   if (Serial.available()) {
     char cmd = Serial.read();
     if (cmd == 'g' || cmd == 'G') {
       isRunning = true;
       integral = 0;
       lastControlTime = millis();
-      Serial.println("[SYSTEM] RUNNING");
+      Serial.println("[RUNNING]");
     } 
     else if (cmd == 'x' || cmd == 'X') {
       isRunning = false;
       stopTracks();
-      Serial.println("[SYSTEM] STOPPED");
+      Serial.println("[STOPPED]");
     }
   }
 
+  // Update sensor data
   readTOFSensor(sensor1);
   readTOFSensor(sensor2);
 
   unsigned long currentTime = millis();
   float deltaTime = (currentTime - lastControlTime) / 1000.0; 
 
+  // Run control loop at 50Hz (20ms)
   if (isRunning && deltaTime >= 0.02) {
     
     float frontDist_cm = getFrontDistance();
     
+    // Obstacle avoidance: pause and wait
     if (frontDist_cm <= 10.0) {
       stopTracks(); 
-      
       integral = 0;
       lastControlTime = currentTime; 
-      
-      Serial.print("[PAUSED] Obstacle at ");
+      Serial.print("Obstacle detected: ");
       Serial.print(frontDist_cm);
-      Serial.println(" cm. Waiting for clear path...");
+      Serial.println(" cm. Paused.");
       return; 
     }
 
+    // Check valid walls (< 500mm)
     bool seeRightWall = (sensor2.current_distance > 0 && sensor2.current_distance < 500 && (currentTime - sensor2.last_update_time < 100));
     bool seeLeftWall = (sensor1.current_distance > 0 && sensor1.current_distance < 500 && (currentTime - sensor1.last_update_time < 100));
 
     static float smoothedRight = TARGET_DISTANCE_MM;
     static float smoothedLeft = TARGET_DISTANCE_MM;
     
+    // Apply low-pass filter
     if (seeRightWall) smoothedRight = (0.3 * (float)sensor2.current_distance) + (0.7 * smoothedRight);
     if (seeLeftWall)  smoothedLeft = (0.3 * (float)sensor1.current_distance) + (0.7 * smoothedLeft);
 
     float error = 0.0;
     bool followingRight = true;
 
+    // Smart wall selection
     if (seeRightWall && seeLeftWall) {
+      // Follow the closer wall
       if (smoothedRight <= smoothedLeft) {
         followingRight = true;
         error = smoothedRight - TARGET_DISTANCE_MM;
@@ -127,6 +138,7 @@ void loop() {
       error = smoothedLeft - TARGET_DISTANCE_MM;
     } 
     else {
+      // No walls detected, go straight
       setLeftTrack(BASE_PWM);
       setRightTrack(BASE_PWM);
       integral = 0; 
@@ -134,12 +146,14 @@ void loop() {
       return; 
     }
 
+    // PID calculation
     integral += error * deltaTime;
     integral = constrain(integral, -300, 300); 
     
     float derivative = (error - prevError) / deltaTime;
     float correction = (Kp * error) + (Ki * integral) + (Kd * derivative);
     
+    // Deadband compensation for track friction
     if (abs(error) > 5.0) {
       if (correction > 0) correction += DEADBAND_PWM;
       if (correction < 0) correction -= DEADBAND_PWM;
@@ -148,6 +162,7 @@ void loop() {
     int cmdLeft = BASE_PWM;
     int cmdRight = BASE_PWM;
 
+    // Steering logic
     if (followingRight) {
       cmdLeft = BASE_PWM - correction;
       cmdRight = BASE_PWM + correction;
@@ -156,12 +171,14 @@ void loop() {
       cmdRight = BASE_PWM - correction;
     }
 
+    // Constrain PWM to safe limits
     cmdLeft = constrain(cmdLeft, -(800 * 6 / 7.2), (800 * 6 / 7.2));
     cmdRight = constrain(cmdRight, -(800 * 6 / 7.2), (800 * 6 / 7.2));
     
     setLeftTrack(cmdLeft);
     setRightTrack(cmdRight);
 
+    // Debug info
     Serial.print(followingRight ? "Wall:RIGHT" : "Wall:LEFT");
     Serial.print(", Front:"); Serial.print(frontDist_cm);
     Serial.print("cm, Dist:"); Serial.print(followingRight ? smoothedRight : smoothedLeft);
@@ -173,6 +190,7 @@ void loop() {
   }
 }
 
+// Parse ToF data from serial buffer
 void readTOFSensor(TOFSensor& sensor) {
   while (sensor.port.available()) {
     uint8_t c = sensor.port.read();
