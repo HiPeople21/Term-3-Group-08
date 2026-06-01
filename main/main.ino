@@ -39,7 +39,7 @@ float Kp = 1.0;
 float Ki = 0.0;
 float Kd = 0.0;
 
-const int baseSpeed = 800 * 6 / 7.2;
+const int baseSpeed = 650 * 6 / 7.2;
 const int maxSpeed  = 800 * 6 / 7.2;
 const int minSpeed  = -(800 * 6 / 7.2);
 const int setpoint  = 5500;
@@ -60,6 +60,7 @@ unsigned long prevTime = 0;
 bool running = false;
 
 int prevMiddleValue = 0;
+int turnInBase = 0;
 
 long encoderAtIR   = 0;
 long planterTarget = 0;
@@ -201,6 +202,18 @@ void runLineFollower() {
   setRightTrack(rightSpeed);
 }
 
+
+void angleLeft(int speed){
+  setLeftTrack(0);
+  setRightTrack(speed);
+}
+
+void angleRight(int speed){
+  setLeftTrack(speed);
+  setRightTrack(0);
+}
+
+
 bool checkForHole() {
   uint8_t midIdx      = getIRSensorCount() / 2;
   int     middleValue = getIRValue(midIdx);
@@ -215,9 +228,26 @@ bool checkForHole() {
 
 bool isJunction() {
   readIRPosition();
-  uint8_t lastIdx = getIRSensorCount() - 1;
+  uint8_t lastIdx = getIRSensorCount()-1;
   return (getIRValue(0) > 800 && getIRValue(lastIdx) > 800);
 }
+
+bool isBlank(){
+  readIRPosition();
+  for (uint8_t i = 0; i < getIRSensorCount(); i++) {
+    if (getIRValue(i) < 100) return true;
+  }
+  return false;
+}
+
+
+// bool isHalfJunction() {
+//   readIRPosition();
+//   uint8_t midIdx = (getIRSensorCount()+1)/2 ;
+//   uint8_t lastIdx = getIRSensorCount()-1;
+
+//   return((getIRValue(0) > 800 && getIRValue(midIdx) > 800) || getIRValue(lastIdx) > 800 && getIRValue(midIdx) > 800)
+// }
 
 void driveStraight(int speed) {
   setLeftTrack(speed);
@@ -350,6 +380,29 @@ void loop() {
     // Serial.println(state);
     switch (stage){
       case BASE:
+        switch(state){
+          case FOLLOWING: {
+            runLineFollower();
+            if (isJunction()) {
+              stopTracks();
+              state = JUNCTION_HANDLING;
+              Serial.println("Junction detected");
+              turnInBase += 1;
+            }else if(isBlank()){
+              stopTracks();
+              state = BLANK;
+              Serial.println("Switching to blank mode");
+            }
+            break;
+            //if ******RFID CODE GOES HERE YUBO*****
+          }
+          case JUNCTION_HANDLING: {
+            angleRight(500);
+            state = FOLLOWING;
+            break;
+          }
+           
+        }
 
         break;
       case BLANK:
@@ -362,22 +415,18 @@ void loop() {
 
           case FOLLOWING: {
             runLineFollower();
-
             if (checkForHole()) {
               irDetectedAt = millis();
               encoderAtIR  = getTrackEncoder();
               state = WAITING_FOR_RFID;
               Serial.println("Hole detected");
-              break;
             } else if (isJunction()) {
               stopTracks();
               state = JUNCTION_HANDLING;
               Serial.println("Junction detected");
-              break;
             } else {
               Serial.print("Following Line, not at junction");
-              break;
-            }
+            } 
             break;
           }
 
