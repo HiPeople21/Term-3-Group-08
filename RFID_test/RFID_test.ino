@@ -2,7 +2,6 @@
 #include "MFRC522_I2C.h"
 
 MFRC522_I2C mfrc522(0x28, -1, &Wire1);  // Create MFRC522 instance.  创建MFRC522实例
-
 void setup()
 {
   Serial.begin(9600);

@@ -57,7 +57,7 @@ float integral  = 0;
 float prevError = 0;
 unsigned long prevTime = 0;
 
-bool running = false;
+bool running = true;
 
 int prevMiddleValue = 0;
 int turnInBase = 0;
@@ -79,7 +79,7 @@ enum Stage {
   RETURNING
 };
 
-Stage stage = LINED; 
+Stage stage = BASE; 
 
 enum State {
   FOLLOWING,
@@ -101,7 +101,7 @@ State state = FOLLOWING;
 
 void revive() {
   // Placeholder — revival logic to be implemented
-  Serial.println("Revive");
+  // Serial.println("Revive");
 }
 
 void checkReviveButton() {
@@ -112,7 +112,7 @@ void checkReviveButton() {
   if ((millis() - lastReviveDebounce) > debounceDelay && reading != reviveBtnState) {
     reviveBtnState = reading;
     if (reviveBtnState == LOW) {  // Button pressed (active-low with pull-up)
-      Serial.println("[Revive] Button pressed.");
+      // Serial.println("[Revive] Button pressed.");
       revive();
     }
   }
@@ -147,8 +147,8 @@ void checkKillButton() {
     killBtnState = reading;
     if (killBtnState == LOW) {  // Button pressed (active-low with pull-up)
       isKilledLocal = !isKilledLocal;
-      Serial.print("[Kill Btn] ");
-      Serial.println(isKilledLocal ? "KILLED" : "ENABLED");
+      // Serial.print("[Kill Btn] ");
+      // Serial.println(isKilledLocal ? "KILLED" : "ENABLED");
       if (isKilledLocal) stopTracks();
     }
   }
@@ -157,15 +157,15 @@ void checkKillButton() {
 void checkRFID() {
   if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial()) return;
 
-  Serial.print("[RFID] UID:");
+  // Serial.print("[RFID] UID:");
   for (byte i = 0; i < mfrc522.uid.size; i++) {
-    Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
-    Serial.print(mfrc522.uid.uidByte[i], HEX);
+    // Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+    // Serial.print(mfrc522.uid.uidByte[i], HEX);
   }
-  Serial.println();
+  // Serial.println();
   mfrc522.PICC_HaltA();
 
-  Serial.println("[Planter] Rotation triggered.");
+  // Serial.println("[Planter] Rotation triggered.");
   triggerPlanterRotation();
 }
 
@@ -233,11 +233,18 @@ bool isJunction() {
 }
 
 bool isBlank(){
+  int count = 0;
   readIRPosition();
   for (uint8_t i = 0; i < getIRSensorCount(); i++) {
-    if (getIRValue(i) < 100) return true;
+    if (getIRValue(i) < 100){
+      count += 1;
+    }
   }
-  return false;
+  if(count == 0){
+    return true;
+  } else {
+    return false;
+  }
 }
 
 
@@ -263,27 +270,28 @@ void initTurn(float degrees, State returnState) {
 // -----------------------------------------------------------------------
 
 void setup() {
-  Serial.begin(115200);
-  while (!Serial && millis() < 3000);
+  // Serial.begin(115200);
+ 
+  // while (!Serial && millis() < 3000);
 
   // I2C for RFID + motors
   Wire1.begin();
 
   // RFID reader
   mfrc522.PCD_Init();
-  Serial.println("[RFID] Reader ready.");
+  // Serial.println("[RFID] Reader ready.");
 
   // Motor shield (Wire1, address 0x12)
   initMotors();
-  Serial.println("[Motors] Ready.");
+  // Serial.println("[Motors] Ready.");
 
   // TOF sensors (Serial1 + Serial4) and ultrasonic (pins 44/42)
   initSensors();
-  Serial.println("[Sensors] TOF + Ultrasonic ready.");
+  // Serial.println("[Sensors] TOF + Ultrasonic ready.");
 
   // IR array (QTR 12-sensor, ~10s calibration)
   initIRArray();
-  Serial.println("[IR] Ready.");
+  // Serial.println("[IR] Ready.");
 
   // Kill switch LED + button
   pinMode(LED_RED_PIN,      OUTPUT);
@@ -292,13 +300,13 @@ void setup() {
   pinMode(REVIVE_BUTTON_PIN, INPUT_PULLUP);
   digitalWrite(LED_RED_PIN,   LOW);
   digitalWrite(LED_GREEN_PIN, HIGH);
-  Serial.println("[Kill Switch] Hardware ready.");
+  // Serial.println("[Kill Switch] Hardware ready.");
 
   // WiFi kill switch
   initWifi();
 
-  Serial.println("=== SYSTEM ONLINE ===");
-  Serial.println("Tracks: W/S/A/D = Fwd/Rev/Left/Right | X = Stop | G = Start autonomy");
+  // Serial.println("=== SYSTEM ONLINE ===");
+  // Serial.println("Tracks: W/S/A/D = Fwd/Rev/Left/Right | X = Stop | G = Start autonomy");
 
   setupGrid();
   register_bot();
@@ -335,36 +343,36 @@ void loop() {
     wasPreviouslyKilled = false;
   }
 
-  if (!killed) {
-    char cmd = Serial.read();
-    if (cmd == 'g' || cmd == 'G') {
-      running = true;
-      resetPID();
-      state = FOLLOWING;
-      Serial.println("Running");
-    } else if (cmd == 'x' || cmd == 'X') {
-      running = false;
-      stopTracks();
-      Serial.println("Stopped");
-    } else if (!running) {
-      if      (cmd == 'w' || cmd == 'W') { Serial.println("Executed w"); setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  }
-      else if (cmd == 's' || cmd == 'S') { Serial.println("Executed s"); setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
-      else if (cmd == 'a' || cmd == 'A') { Serial.println("Executed a"); initTurn(-90.0, FOLLOWING); }
-      else if (cmd == 'd' || cmd == 'D') { Serial.println("Executed d"); initTurn( 90.0, FOLLOWING); }
-      // else if (cmd == '1')               { Serial.println("Executed 1"); openAirlock(); }
-      // else if (cmd == '2')               { Serial.println("Executed 2"); openAirlock(); }
-      else if (cmd == '3') {
-        Serial.println("Executed 3");
-        int index = Serial.parseInt();
-        seedPlanted(UIDs[index]);
-      }
-      else if (cmd == '4') {
-        Serial.println("Executed 4");
-        int index = Serial.parseInt();
-        checkFertility(UIDs[index]);
-      }
-    }
-  }
+  // if (!killed) {
+  //   char cmd = Serial.read();
+  //   if (cmd == 'g' || cmd == 'G') {
+  //     running = true;
+  //     resetPID();
+  //     state = FOLLOWING;
+  //     Serial.println("Running");
+  //   } else if (cmd == 'x' || cmd == 'X') {
+  //     running = false;
+  //     stopTracks();
+  //     Serial.println("Stopped");
+  //   } else if (!running) {
+  //     if      (cmd == 'w' || cmd == 'W') { Serial.println("Executed w"); setRightTrack(trackSpeed);  setLeftTrack(trackSpeed);  }
+  //     else if (cmd == 's' || cmd == 'S') { Serial.println("Executed s"); setRightTrack(-trackSpeed); setLeftTrack(-trackSpeed); }
+  //     else if (cmd == 'a' || cmd == 'A') { Serial.println("Executed a"); initTurn(-90.0, FOLLOWING); }
+  //     else if (cmd == 'd' || cmd == 'D') { Serial.println("Executed d"); initTurn( 90.0, FOLLOWING); }
+  //     else if (cmd == '1')               { Serial.println("Executed 1"); openAirlock("C2834BF4", 'A'); }
+  //     else if (cmd == '2')               { Serial.println("Executed 2"); openAirlock("C2834BF4", 'A'); }
+  //     else if (cmd == '3') {
+  //       Serial.println("Executed 3");
+  //       int index = Serial.parseInt();
+  //       seedPlanted(UIDs[index]);
+  //     }
+  //     else if (cmd == '4') {
+  //       Serial.println("Executed 4");
+  //       int index = Serial.parseInt();
+  //       checkFertility(UIDs[index]);
+  //     }
+  //   }
+  // }
 
   // RFID — triggers planter rotation when card detected (manual mode only)
   // checkRFID();
@@ -372,7 +380,7 @@ void loop() {
   if (!killed && state == TURNING) {
     if (updateTurn()) {
       state = turnReturnState;
-      Serial.println("Turn complete");
+      // Serial.println("Turn complete");
     }
   }
 
@@ -383,18 +391,36 @@ void loop() {
         switch(state){
           case FOLLOWING: {
             runLineFollower();
+            if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+              stopTracks();
+              detectedUID = "";
+              for (byte i = 0; i < mfrc522.uid.size; i++) {
+                if (mfrc522.uid.uidByte[i] < 0x10) detectedUID += "0";
+                detectedUID += String(mfrc522.uid.uidByte[i], HEX);
+              }
+              detectedUID.toUpperCase();
+
+              mfrc522.PICC_HaltA();
+              mfrc522.PCD_StopCrypto1();
+
+              // Serial.println("RFID confirmed");
+
+              openAirlock(detectedUID, 'A');
+              delay(500);
+            }
             if (isJunction()) {
               stopTracks();
               state = JUNCTION_HANDLING;
-              Serial.println("Junction detected");
+              // Serial.println("Junction detected");
               turnInBase += 1;
             }else if(isBlank()){
               stopTracks();
-              state = BLANK;
-              Serial.println("Switching to blank mode");
+              stage = BLANK;
+              // Serial.println("Switching to blank mode");
             }
+
+
             break;
-            //if ******RFID CODE GOES HERE YUBO*****
           }
           case JUNCTION_HANDLING: {
             angleRight(500);
@@ -405,10 +431,15 @@ void loop() {
         }
 
         break;
-      case BLANK:
-        break;
-      case RETURNING:
-        break;
+        case BLANK:
+          driveStraight(500);
+          if(!isBlank()){
+            stage = LINED;
+            state = FOLLOWING;
+          }
+          break;
+        case RETURNING:
+          break;
 
       case LINED: {
         switch (state) {
@@ -419,13 +450,13 @@ void loop() {
               irDetectedAt = millis();
               encoderAtIR  = getTrackEncoder();
               state = WAITING_FOR_RFID;
-              Serial.println("Hole detected");
+              // Serial.println("Hole detected");
             } else if (isJunction()) {
               stopTracks();
               state = JUNCTION_HANDLING;
-              Serial.println("Junction detected");
+              // Serial.println("Junction detected");
             } else {
-              Serial.print("Following Line, not at junction");
+              // Serial.print("Following Line, not at junction");
             } 
             break;
           }
@@ -439,21 +470,21 @@ void loop() {
             resetPID();
 
             state = FOLLOWING;
-            Serial.println("Junction cleared");
+            // Serial.println("Junction cleared");
             break;
           }
 
           case WAITING_FOR_RFID: {
             if (isJunction()) {
               driveStraight(600 * 6 / 7.2);
-              Serial.println("going straight to rfid");
+              // Serial.println("going straight to rfid");
             } else {
               runLineFollower();
             }
 
             if (millis() - irDetectedAt > IR_WINDOW_MS) {
               state = FOLLOWING;
-              Serial.println("RFID timeout, false positive ir detection");
+              // Serial.println("RFID timeout, false positive ir detection");
               break;
             }
 
@@ -472,7 +503,7 @@ void loop() {
               checkFertility(detectedUID);
               fertilityRequestedAt = millis();
               state = WAITING_FOR_FERTILITY;
-              Serial.println("RFID confirmed");
+              // Serial.println("RFID confirmed");
             }
             break;
           }
@@ -484,13 +515,13 @@ void loop() {
 
             if (encerror > 5) {
               driveStraight(600 * 6 / 7.2);
-              Serial.print("going straight to hole");
+              // Serial.print("going straight to hole");
             } else {
               stopTracks();
               planterTarget    = getPlanterEncoder() + ticksToPlant;
               plantingStartedAt = millis();
               state = PLANTING;
-              Serial.println("At planting position");
+              // Serial.println("At planting position");
             }
             break;
           }
@@ -506,7 +537,7 @@ void loop() {
               delay(500);
               resetPID();
               state = FOLLOWING;
-              Serial.println("Plant complete");
+              // Serial.println("Plant complete");
             }
             break;
           }
@@ -515,7 +546,7 @@ void loop() {
             stopTracks();
             if (millis() - fertilityRequestedAt > FERTILITY_TIMEOUT_MS) {
               state = FOLLOWING;
-              Serial.println("Fertility timeout, skipping hole");
+              // Serial.println("Fertility timeout, skipping hole");
             }
             break;
           }
