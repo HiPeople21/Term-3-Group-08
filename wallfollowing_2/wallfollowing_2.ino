@@ -1,8 +1,8 @@
 #include <Wire.h>
 #include "motors.h"
 
-#define TRIG_FRONT 42
-#define ECHO_FRONT 44
+#define TRIG_FRONT 44
+#define ECHO_FRONT 42
 
 struct TOFSensor {
   Stream& port;
@@ -15,15 +15,15 @@ struct TOFSensor {
 TOFSensor sensor1 = {Serial1, "Sensor 1 (TX0)", {0}, 0, 0};
 TOFSensor sensor2 = {Serial4, "Sensor 2 (TX3)", {0}, 0, 0};
 
-bool isRunning = true; 
+bool isRunning = false; 
 
-const int TARGET_DISTANCE_MM = 100; 
+const int TARGET_DISTANCE_MM = 150; 
 const int BASE_PWM = 550; 
 const int DEADBAND_PWM = 60; 
 
-float Kp = 2.5; 
+float Kp = 4.0; 
 float Ki = 0.0; 
-float Kd = 2; 
+float Kd = 7.0; 
 
 float integral = 0;
 float prevError = 0;
@@ -43,14 +43,8 @@ float getFrontDistance() {
 }
 
 void setup() {
-  // 1. 初始化串口，但删除了死等 USB 连接的代码
   Serial.begin(115200); 
-  
-  // ==========================================
-  // 【核心修复 1：硬件启动稳压延迟】
-  // 纯电池供电上电时，给降压模块和主控板电容 2 秒钟时间稳定电压
-  delay(2000); 
-  // ==========================================
+  while (!Serial && millis() < 3000); 
   
   pinMode(TRIG_FRONT, OUTPUT);
   pinMode(ECHO_FRONT, INPUT);
@@ -58,38 +52,28 @@ void setup() {
   Serial1.begin(921600); 
   Serial4.begin(921600); 
   Wire1.begin();
-  
-  // ==========================================
-  // 【核心修复 2：防止电机初始化瞬间抽取大电流锁死 I2C】
-  delay(500); 
-  // ==========================================
   initMotors(); 
   
-  if (Serial) {
-    Serial.println("--- Crawler SMART PID + AUTO-RESUME Ready ---");
-    Serial.println("System starting in AUTO mode...");
-  }
-  
-  // 硬件全部就绪且电压稳定后，再允许系统运行
-  isRunning = true;
+  Serial.println("--- Crawler SMART PID + AUTO-RESUME Ready ---");
+  Serial.println("Send 'g' to start, 'x' to stop.");
   lastControlTime = millis();
 }
 
 void loop() {
-  // if (Serial.available()) {
-  //   char cmd = Serial.read();
-  //   if (cmd == 'g' || cmd == 'G') {
-  //     isRunning = true;
-  //     integral = 0;
-  //     lastControlTime = millis();
-  //     Serial.println("[SYSTEM] RUNNING");
-  //   } 
-  //   else if (cmd == 'x' || cmd == 'X') {
-  //     isRunning = false;
-  //     stopTracks();
-  //     Serial.println("[SYSTEM] STOPPED");
-  //   }
-  // }
+  if (Serial.available()) {
+    char cmd = Serial.read();
+    if (cmd == 'g' || cmd == 'G') {
+      isRunning = true;
+      integral = 0;
+      lastControlTime = millis();
+      Serial.println("[SYSTEM] RUNNING");
+    } 
+    else if (cmd == 'x' || cmd == 'X') {
+      isRunning = false;
+      stopTracks();
+      Serial.println("[SYSTEM] STOPPED");
+    }
+  }
 
   readTOFSensor(sensor1);
   readTOFSensor(sensor2);
@@ -98,16 +82,19 @@ void loop() {
   float deltaTime = (currentTime - lastControlTime) / 1000.0; 
 
   if (isRunning && deltaTime >= 0.02) {
-
+    
     float frontDist_cm = getFrontDistance();
-
+    
     if (frontDist_cm <= 10.0) {
-      stopTracks();
+      stopTracks(); 
+      
       integral = 0;
-      prevError = 0;
-      lastControlTime = currentTime;
-      Serial.println("[STOP] Front obstacle");
-      return;
+      lastControlTime = currentTime; 
+      
+      Serial.print("[PAUSED] Obstacle at ");
+      Serial.print(frontDist_cm);
+      Serial.println(" cm. Waiting for clear path...");
+      return; 
     }
 
     bool seeRightWall = (sensor2.current_distance > 0 && sensor2.current_distance < 500 && (currentTime - sensor2.last_update_time < 100));
@@ -148,19 +135,11 @@ void loop() {
     }
 
     integral += error * deltaTime;
-    integral = constrain(integral, -300, 300);
-
+    integral = constrain(integral, -300, 300); 
+    
     float derivative = (error - prevError) / deltaTime;
     float correction = (Kp * error) + (Ki * integral) + (Kd * derivative);
-
-    // Angled-approach gate: sensor reads "too far" (error > 0) but distance is
-    // actively decreasing (derivative < 0), meaning the robot is closing on the
-    // wall at an angle, not genuinely far from it. Cap correction so we don't
-    // steer further toward the wall.
-    if (error > 0.0f && derivative < 0.0f) {
-      correction = min(correction, 0.0f);
-    }
-
+    
     if (abs(error) > 5.0) {
       if (correction > 0) correction += DEADBAND_PWM;
       if (correction < 0) correction -= DEADBAND_PWM;
@@ -170,29 +149,24 @@ void loop() {
     int cmdRight = BASE_PWM;
 
     if (followingRight) {
-      cmdLeft = BASE_PWM + correction;
-      cmdRight = BASE_PWM - correction;
-    } else {
       cmdLeft = BASE_PWM - correction;
       cmdRight = BASE_PWM + correction;
+    } else {
+      cmdLeft = BASE_PWM + correction;
+      cmdRight = BASE_PWM - correction;
     }
 
-    // Floor at a minimum forward speed so neither track can reverse and
-    // pivot the robot into the wall.
-    const int MIN_FORWARD_PWM = 100;
-    cmdLeft = constrain(cmdLeft, MIN_FORWARD_PWM, (int)(800 * 6 / 7.2));
-    cmdRight = constrain(cmdRight, MIN_FORWARD_PWM, (int)(800 * 6 / 7.2));
+    cmdLeft = constrain(cmdLeft, -(800 * 6 / 7.2), (800 * 6 / 7.2));
+    cmdRight = constrain(cmdRight, -(800 * 6 / 7.2), (800 * 6 / 7.2));
     
     setLeftTrack(cmdLeft);
     setRightTrack(cmdRight);
-    
-    if (Serial){
-      Serial.print(followingRight ? "Wall:RIGHT" : "Wall:LEFT");
-      Serial.print(", Front:"); Serial.print(frontDist_cm);
-      Serial.print("cm, Dist:"); Serial.print(followingRight ? smoothedRight : smoothedLeft);
-      Serial.print("mm, L_PWM:"); Serial.print(cmdLeft);
-      Serial.print(", R_PWM:"); Serial.println(cmdRight);
-    }
+
+    Serial.print(followingRight ? "Wall:RIGHT" : "Wall:LEFT");
+    Serial.print(", Front:"); Serial.print(frontDist_cm);
+    Serial.print("cm, Dist:"); Serial.print(followingRight ? smoothedRight : smoothedLeft);
+    Serial.print("mm, L_PWM:"); Serial.print(cmdLeft);
+    Serial.print(", R_PWM:"); Serial.println(cmdRight);
     
     prevError = error;
     lastControlTime = currentTime;
