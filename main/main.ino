@@ -38,7 +38,7 @@ float Kp = 1.0;
 float Ki = 0.0;
 float Kd = 0.0;
 
-const int baseSpeed = 800 * 6 / 7.2;
+const int baseSpeed = 650 * 6 / 7.2;
 const int maxSpeed  = 800 * 6 / 7.2;
 const int minSpeed  = -(800 * 6 / 7.2);
 const int setpoint  = 5500;
