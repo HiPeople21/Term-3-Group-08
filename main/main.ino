@@ -39,7 +39,7 @@ float Kp = 1.0;
 float Ki = 0.0;
 float Kd = 0.0;
 
-const int baseSpeed = 650 * 6 / 7.2;
+const int baseSpeed = 500 * 6 / 7.2;
 const int maxSpeed  = 800 * 6 / 7.2;
 const int minSpeed  = -(800 * 6 / 7.2);
 const int setpoint  = 5500;
@@ -387,12 +387,11 @@ void loop() {
   if (running && !killed) {
     // Serial.println(state);
     switch (stage){
-      case BASE:
+      case BASE: {
         switch(state){
           case FOLLOWING: {
             runLineFollower();
             if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
-              stopTracks();
               detectedUID = "";
               for (byte i = 0; i < mfrc522.uid.size; i++) {
                 if (mfrc522.uid.uidByte[i] < 0x10) detectedUID += "0";
@@ -402,11 +401,17 @@ void loop() {
 
               mfrc522.PICC_HaltA();
               mfrc522.PCD_StopCrypto1();
+              stopTracks();
 
               // Serial.println("RFID confirmed");
 
               openAirlock(detectedUID, 'A');
-              delay(500);
+              // for (int i = 0; i < 2; i++) {
+              //   digitalWrite(LED_GREEN_PIN, LOW);
+              //   delay(100);
+              //   digitalWrite(LED_GREEN_PIN, HIGH);
+              //   delay(150);
+              // }
             }
             if (isJunction()) {
               stopTracks();
@@ -425,6 +430,10 @@ void loop() {
           case JUNCTION_HANDLING: {
             angleRight(500);
             state = FOLLOWING;
+            digitalWrite(LED_GREEN_PIN, LOW);
+            digitalWrite(LED_RED_PIN, LOW);
+            delay(100);
+            
             break;
           }
            
@@ -432,15 +441,15 @@ void loop() {
 
         break;
         case BLANK:
-          driveStraight(500);
-          if(!isBlank()){
-            stage = LINED;
+          // driveStraight(500);
+          // if(!isBlank()){
+            // stage = LINED;
             state = FOLLOWING;
-          }
+          // }
           break;
         case RETURNING:
           break;
-
+      }
       case LINED: {
         switch (state) {
 

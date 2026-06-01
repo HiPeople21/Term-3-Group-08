@@ -140,7 +140,7 @@ void seedPlanted(String tagId) {
 }
 
 void openAirlock(String tagId, char airlock) {
-  char reg[64];
+  char reg[128];
   snprintf(reg, sizeof(reg), "type=openAirlock airlock=%c tag_id=%s board_id=%s", airlock, tagId.c_str(), BoardId);
   messenger.sendToBoard("server", reg);
 }	
