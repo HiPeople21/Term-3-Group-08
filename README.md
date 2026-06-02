@@ -113,7 +113,7 @@ See the flowchart documents for detailed diagrams of each behaviour:
 | Controller | Kp | Ki | Kd | Notes |
 |------------|----|----|-----|-------|
 | Line following | 1.0 | 0.0 | 0.0 | |
-| Wall following (control_test) | 2.5 | 0.0 | 2.0 | |
+| Wall following (control_test) | 4.0 | 0.0 | 7.0 |  |
 
 ## Testing Evidence
 
