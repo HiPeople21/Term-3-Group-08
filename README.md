@@ -40,4 +40,102 @@ The `main/` directory is where the code used in the finals will live. In this di
 - `wifi_utils.cpp`: handles WiFi communication with the server.
 - `wifi_utils.h`: header file for `wifi_utils.cpp`.
 
+## Software Overview
+
+See the flowchart documents for detailed diagrams of each behaviour:
+
+- [FLOWCHARTS1.md](FLOWCHARTS1.md) — Main loop and stage transitions
+- [FLOWCHARTS2.md](FLOWCHARTS2.md) — Base exit logic, line following and planting mission
+- [FLOWCHARTS3.md](FLOWCHARTS3.md) — Kill switch and safety handling, WiFi/MQTT communication
+
+### Component Interaction
+
+| Component | Communicates With | Purpose |
+|-----------|------------------|---------|
+| `main.ino` | All modules | State machine, loop orchestration |
+| `motors.cpp` | Motoron (I2C, 0x12) | Track motors, planter motor, encoder reading, point turns |
+| `sensors.cpp` | IR array (GPIO), TOF (Serial1/4), Ultrasonic (GPIO) | Line position, distance sensing |
+| `wifi_utils.cpp` | MQTT server via MiniMessenger | Kill switch, fertility checks, airlock requests, heartbeat |
+| `parser.cpp` | `wifi_utils.cpp` | Parses `key=value` server messages into a map |
+| RFID (MFRC522) | I2C (Wire1, 0x28) | Tag identification at grid nodes and base exit |
+
+### Key Constants
+
+| Constant | Value | Meaning |
+|----------|-------|---------|
+| `baseSpeed` | `500 * 6/7.2` | Nominal PWM scaled for 7.2V battery (6V motor rating) |
+| `maxSpeed` | `800 * 6/7.2` | Maximum PWM, voltage-compensated |
+| `setpoint` | 5500 | PID target (centre of 11-sensor IR array, range 0–11000) |
+| `ticksToHole` | 1355 | Encoder ticks from IR detection to planting hole |
+| `ticksToPlant` | 233 | Encoder ticks for one 60° planter rotation |
+| `debounceDelay` | 50 ms | Kill switch button debounce threshold |
+| `HEARTBEAT_TIMEOUT_MS` | 1000 ms | Server heartbeat timeout before auto-kill |
+| `IR_WINDOW_MS` | 1000 ms | Time window to find RFID after IR hole detection |
+| `FERTILITY_TIMEOUT_MS` | 5000 ms | Timeout waiting for server fertility response |
+
 ## Calibration
+
+<!-- Fill in your calibration notes below -->
+
+### IR Array Calibration
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Number of sensors | 11 | |
+| Calibration sweeps | 400 | |
+| Calibration method | | _e.g. manual sweep across black line on white surface_ |
+| Surface type | | _e.g. white board with black electrical tape_ |
+| Min/max values observed | | _e.g. min ~50, max ~2500_ |
+
+### Encoder / Distance Calibration
+
+| Parameter | Value | How it was measured |
+|-----------|-------|---------------------|
+| Counts per revolution | 1400 | |
+| Wheel diameter | 38.5 mm | |
+| Track distance (between tracks) | 170 mm | |
+| IR-to-hole distance | 116.5 mm / 1355 ticks | |
+| Turn correction factor | 4.75/4 | |
+| Ticks for 60° planter rotation | 233 | |
+
+### PID Tuning
+
+| Controller | Kp | Ki | Kd | Notes |
+|------------|----|----|-----|-------|
+| Line following | 1.0 | 0.0 | 0.0 | |
+| Wall following (control_test) | 2.5 | 0.0 | 2.0 | |
+
+## Testing Evidence
+
+<!-- Add rows for each test you've run. Link to photos/videos if available. -->
+
+| Date | Test | Result | Notes |
+|------|------|--------|-------|
+| | IR calibration | | |
+| | Line following (straight) | | |
+| | Line following (curves) | | |
+| | Junction detection | | |
+| | RFID reading | | |
+| | Airlock open request | | |
+| | Planter rotation | | |
+| | Kill switch (hardware) | | |
+| | Kill switch (WiFi) | | |
+| | Heartbeat timeout | | |
+| | Encoder-based driving | | |
+| | Point turn accuracy | | |
+
+## Known Limitations
+
+<!-- Fill in what didn't work or is incomplete -->
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Line following | | |
+| RFID + planting | | |
+| Base exit (airlock) | | |
+| Kill switch (local + WiFi) | | |
+| TOF distance sensors | | |
+| Wall following | | |
+| Obstacle avoidance | | |
+| Return to base | | |
+| Dead reckoning | | |
