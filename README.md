@@ -17,7 +17,7 @@ Note that the `QTRSensors` library must be modified before running the code. In 
 ### Uploading and Running
 
 Plug the Arduino into your computer using a data transmitting USB cable. There are two ways to select the Arduino:
-- Click on the dropdown in the top left of the Arduino IDE, to the right of the debugging button, and select the Arduino. It should say something like `Arduino Giga R1` with `COMX` under it, where X is an integer.
+- Click on the dropdown in the top left of the Arduino IDE, to the right of the debugging button, and select the Arduino. It should say something like `Arduino Giga R1` with `COMX` under it, where `X` is an integer.
 - Click on `Tools` in the menubar. Select `Arduino Giga R1` in Board, and `COMX` in Port.
 
 After this, you can click `Verify` to ensure the code compiles correctly. Click `Upload` to begin the uploading process. Once the sketch has been uploaded, you can unplug the Arduino. Then the Arduino begins its calibration process for the IR array.
@@ -113,26 +113,26 @@ flowchart TD
 
 | Component | Communicates With | Purpose |
 |-----------|------------------|---------|
-| `main.ino` | All modules | State machine, loop orchestration |
-| `motors.cpp` | Motoron (I2C, 0x12) | Track motors, planter motor, encoder reading, point turns |
-| `sensors.cpp` | IR array (GPIO), TOF (Serial1/4), Ultrasonic (GPIO) | Line position, distance sensing |
-| `wifi_utils.cpp` | MQTT server via MiniMessenger | Kill switch, fertility checks, airlock requests, heartbeat |
-| `parser.cpp` | `wifi_utils.cpp` | Parses `key=value` server messages into a map |
-| RFID (MFRC522) | I2C (Wire1, 0x28) | Tag identification at grid nodes and base exit |
+| `main.ino` | All modules | State machine, loop orchestration. |
+| `motors.cpp` | Motoron (I2C, 0x12) | Track motors, planter motor, encoder reading, point turns. |
+| `sensors.cpp` | IR array (GPIO), TOF (Serial1/4), Ultrasonic (GPIO) | Line position, distance sensing. |
+| `wifi_utils.cpp` | MQTT server via MiniMessenger | Kill switch, fertility checks, airlock requests, heartbeat. |
+| `parser.cpp` | `wifi_utils.cpp` | Parses `key=value` server messages into a map. |
+| RFID (MFRC522) | I2C (Wire1, 0x28) | Tag identification at grid nodes and base exit. |
 
 ### Key Constants
 
 | Constant | Value | Meaning |
 |----------|-------|---------|
-| `baseSpeed` | `500 * 6/7.2` | Nominal PWM scaled for 7.2V battery (6V motor rating) |
-| `maxSpeed` | `800 * 6/7.2` | Maximum PWM, voltage-compensated |
-| `setpoint` | 5500 | PID target (centre of 11-sensor IR array, range 0–11000) |
-| `ticksToHole` | 1355 | Encoder ticks from IR detection to planting hole |
-| `ticksToPlant` | 233 | Encoder ticks for one 60° planter rotation |
-| `debounceDelay` | 50 ms | Kill switch button debounce threshold |
-| `HEARTBEAT_TIMEOUT_MS` | 1000 ms | Server heartbeat timeout before auto-kill |
-| `IR_WINDOW_MS` | 1000 ms | Time window to find RFID after IR hole detection |
-| `FERTILITY_TIMEOUT_MS` | 5000 ms | Timeout waiting for server fertility response |
+| `baseSpeed` | `500 * 6/7.2` | Nominal PWM scaled for 7.2V battery (6V motor rating). |
+| `maxSpeed` | `800 * 6/7.2` | Maximum PWM, voltage-compensated. |
+| `setpoint` | 5500 | PID target (centre of 11-sensor IR array, range 0–11000). |
+| `ticksToHole` | 1355 | Encoder ticks from IR detection to planting hole. |
+| `ticksToPlant` | 233 | Encoder ticks for one 60° planter rotation. |
+| `debounceDelay` | 50 ms | Kill switch button debounce threshold. |
+| `HEARTBEAT_TIMEOUT_MS` | 1000 ms | Server heartbeat timeout before auto-kill. |
+| `IR_WINDOW_MS` | 1000 ms | Time window to find RFID after IR hole detection. |
+| `FERTILITY_TIMEOUT_MS` | 5000 ms | Timeout waiting for server fertility response. |
 
 ## Calibration
 
@@ -142,20 +142,20 @@ flowchart TD
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | Number of sensors | 11 | We originally wanted to use the given 9 channel IR array with two additional 2 channel IR array at a wider distance to better handle PID control, since this would mean the robot would oscillate less to try find the line. However, one of the edge sensors on the 9 channel IR array wasn't working, so we removed it from the code. We also decided to remove the sensor from the opposite side to balance the IR sensors on each side. |
-| Calibration sweeps | 400 | This was the value used in the example in the official `QTRSensors` repository. The file can be found [here](https://github.com/pololu/qtr-sensors-arduino/blob/master/examples/QTRRCExample/QTRRCExample.ino) |
+| Calibration sweeps | 400 | This was the value used in the example in the official `QTRSensors` repository. The file can be found [here](https://github.com/pololu/qtr-sensors-arduino/blob/master/examples/QTRRCExample/QTRRCExample.ino). |
 | Calibration method | | Manual sweep across black line on the arena surface. |
-| Min/max values observed | | _e.g. min ~50, max ~2500_ |
+| Min/max values observed | | Approximately 50 for minimum values observed and 1000 for maximum values observed. |
 
 ### Encoder / Distance Calibration
 
 | Parameter | Value | How it was measured |
 |-----------|-------|---------------------|
 | Counts per revolution | 1400 | When we were testing the planter mechanism, we had try many values for the encoder ticks for 360°. 1200 was too little, but 1600 was too much. Eventually, we narrowed it down to 1400, which worked very well. A week or two later, we learnt that the motor was made by DFRobot, and when we checked their website it said "average output number of pulses can reach up to 7*2*100 pulses per revolution". |
-| Wheel diameter | 38.5 mm | Vernier caliper |
-| Track distance (between tracks) | 170 mm | Vernier caliper |
-| IR-to-hole distance | 116.5 mm / 1355 ticks | Vernier caliper |
+| Wheel diameter | 38.5 mm | Vernier caliper. |
+| Track distance (between tracks) | 170 mm | Vernier caliper. |
+| IR-to-hole distance | 116.5 mm / 1355 ticks | Vernier caliper. |
 | Turn correction factor | 4.75/4 | When testing discrete 90° turning for the robot, we found that running it 5 times led to an approximate 360° turn. Hence, we added the scale factor. 5/4 was too high, 4.8/4 was still slightly too high, and 4.75/4 landed very close to 90°. |
-| Ticks for 60° planter rotation | 233 | 1400 / 6 = 233.3333... ≈ 233 |
+| Ticks for 60° planter rotation | 233 | 1400 / 6 = 233.3333... ≈ 233. |
 
 ### PID Tuning
 
@@ -168,14 +168,14 @@ flowchart TD
 
 | Date | Test | Result | Notes |
 |------|------|--------|-------|
-| N/A | IR calibration | N/A | Calibrated immediately before usage of the robot as this achieves the most accurate results. This has the downsides of taking longer to test each iteration of the code|
-| 21/05/2026 | Line following (straight) | Successful | Kp = 1. Follows the line successfully, however junctions need to be hardcoded to have a more accurate approach |
+| N/A | IR calibration | N/A | Calibrated immediately before usage of the robot as this achieves the most accurate results. This has the downsides of taking longer to test each iteration of the code. |
+| 21/05/2026 | Line following (straight) | Successful | Kp = 1. Follows the line successfully, however junctions need to be hardcoded to have a more accurate approach. |
 | 21/05/2026 | Line following (curves) | Successful | Kp = 1. Follows the curve successfully, including both gentle curves and harsh corners.|
 | 26/05/2026 | Junction detection | Successful | The isJunction() function which checks if the 2 end IR sensors are activated returned true consistently at junctions. The temporary driveStraight(int speed) function is used to go through the junction instead of line following in order to be consistent and accurate. |
-| 28/04/2026 | RFID reading | Successful | The RFID Scanner was able to both detect and read RFID codes. The range of detection was consistently reading at approximately 0 cm to 2 cm |
-| 26/05/2026 | Airlock open request | Successful | The MiniMessenger library was implemented succesfully, and the airlock was opened. Some minor changes were made to the library on 28/05/2026, so the code was altered, and then tested successfully again |
+| 28/04/2026 | RFID reading | Successful | The RFID Scanner was able to both detect and read RFID codes. The range of detection was consistently reading at approximately 0 cm to 2 cm. |
+| 26/05/2026 | Airlock open request | Successful | The MiniMessenger library was implemented succesfully, and the airlock was opened. Some minor changes were made to the library on 28/05/2026, so the code was altered, and then tested successfully again. |
 | 07/05/2026 | Planter rotation | Partially Successful | The planter spun successfully, and remained aligned after all 5 seeds were released. However, after further testing, we noticed minor allignement issues due to loose screws, and some wear on the wood. In order to fix this, we replaced the wooden planter with acryllic and tightened the screws so the motor remained perpendicular. After the fixes were made, the planter was fully functional.| 
-| 19/05/2026 | Kill switch (hardware) | Successful | The Kill switch was very responsive, and disabled all 3 motors from running until it was pressed again |
+| 19/05/2026 | Kill switch (hardware) | Successful | The Kill switch was very responsive, and disabled all 3 motors from running until it was pressed again. |
 | 20/05/2026 | Kill switch (WiFi) | Successful | Disabled and enabling via the website worked well, all motors stopped, and the light on top turned red. |
 | 28/05/2026 | Heartbeat timeout | Successful | When no heartbeat was detected within 1 second, the robot deactivates. Otherwise, it succesfully ran. If it recieves a heartbeat and enabled = 0, it stopped.|
 | 07/05/2026 | Encoder-based driving | Successful | The robot was able to drive a predetermined distance using the encoders when a command was sent using the Serial.|
