@@ -102,16 +102,17 @@ bool drDone       = false;
 
 // ===== Task 5: Ramp =====
 bool rampDone = false;
+unsigned long rampEnteredAt = 0;
 unsigned long wallLostAt = 0;
 
 // ===== Task 6: Wall Following PID =====
-float Kp_wall = 4.0, Ki_wall = 0.0, Kd_wall = 7.0;
-const int WALL_TARGET_MM  = 150;
+float Kp_wall = 2.0, Ki_wall = 0.0, Kd_wall = 3.0;
+const int WALL_TARGET_MM  = 50;
 const int WALL_BASE_PWM   = 550;
-const int WALL_DEADBAND   = 60;
+const int WALL_DEADBAND   = 30;
 float integral_wall = 0, prevError_wall = 0;
 unsigned long lastWallControl = 0;
-float smoothedRight = 150.0, smoothedLeft = 150.0;
+float smoothedRight = 50.0, smoothedLeft = 50.0;
 int wallLockedSide = 0; // 0 = not locked, 1 = right, -1 = left
 
 // ===== Task 7: Obstacle Avoidance =====
@@ -261,6 +262,7 @@ void resetModeState() {
   drDone       = false;
 
   rampDone   = false;
+  rampEnteredAt = 0;
   wallLostAt = 0;
 
   integral_wall   = 0;
@@ -461,7 +463,23 @@ void runRamp() {
   float* smoothedWall = (wallLockedSide == 1) ? &smoothedRight : &smoothedLeft;
   unsigned long wallDist = (wallLockedSide == 1) ? dR : dL;
 
+  // Record when we first see a wall (entered the airlock)
+  if (seeWall && rampEnteredAt == 0) rampEnteredAt = millis();
+
   if (!seeWall) {
+    // Haven't entered airlock yet — just drive forward
+    if (rampEnteredAt == 0) {
+      driveStraight(WALL_BASE_PWM);
+      lastWallControl = currentTime;
+      return;
+    }
+    // Ignore wall loss in the first 2 seconds after entering
+    if (millis() - rampEnteredAt < 2000) {
+      driveStraight(WALL_BASE_PWM);
+      lastWallControl = currentTime;
+      return;
+    }
+    // Was in airlock and past settling period — check for exit
     if (wallLostAt == 0) wallLostAt = millis();
     if (millis() - wallLostAt > 500) {
       stopTracks();
