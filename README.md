@@ -112,8 +112,8 @@ See the flowchart documents for detailed diagrams of each behaviour:
 
 | Controller | Kp | Ki | Kd | Notes |
 |------------|----|----|-----|-------|
-| Line following | 1.0 | 0.0 | 0.0 |  |
-| Wall following (control_test) | 4.0 | 0.0 | 7.0 |Samll PID parameters could't make the robot turn due to high friction between the rubber tracks and the ground. High $K_d$ is applied to reduce oscillations near the wall during the control test.|
+| Line following | 1.0 | 0.0 | 0.0 | We first used a very small value of Kp, 0.1, and found that it took far to long to centre itself on the line, which resulted in losing the line on corners. We then increased the value to 100, which caused the oscillations to explode, becoming very unstable. Therefore, we began to reduce the Kp, hoping to use the Ziegler-Nichols method for tuning PID, however we found that at Kp = 1, the line following was fast, stable and accurate. While we initially wanted to implement a PID controller, we changed our approach to a P controller as this removed unnecessary complexity and was more time effective.|
+| Wall following (control_test) | 4.0 | 0.0 | 7.0 |Small PID parameters could't make the robot turn due to high friction between the rubber tracks and the ground. High $K_d$ is applied to reduce oscillations near the wall during the control test.|
 
 ## Testing Evidence
 
