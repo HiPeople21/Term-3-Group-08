@@ -15,7 +15,7 @@ struct TOFSensor {
 TOFSensor sensor1 = {Serial1, "Sensor 1 (TX0)", {0}, 0, 0};
 TOFSensor sensor2 = {Serial4, "Sensor 2 (TX3)", {0}, 0, 0};
 
-bool isRunning = true; 
+bool isRunning = false;
 
 const int TARGET_DISTANCE_MM = 100; 
 const int BASE_PWM = 550; 
@@ -43,8 +43,7 @@ float getFrontDistance() {
 }
 
 void setup() {
-  // 1. 初始化串口，但删除了死等 USB 连接的代码
-  Serial.begin(115200); 
+  Serial.begin(115200);
   
   // ==========================================
   // 【核心修复 1：硬件启动稳压延迟】
@@ -76,21 +75,6 @@ void setup() {
 }
 
 void loop() {
-  // if (Serial.available()) {
-  //   char cmd = Serial.read();
-  //   if (cmd == 'g' || cmd == 'G') {
-  //     isRunning = true;
-  //     integral = 0;
-  //     lastControlTime = millis();
-  //     Serial.println("[SYSTEM] RUNNING");
-  //   } 
-  //   else if (cmd == 'x' || cmd == 'X') {
-  //     isRunning = false;
-  //     stopTracks();
-  //     Serial.println("[SYSTEM] STOPPED");
-  //   }
-  // }
-
   readTOFSensor(sensor1);
   readTOFSensor(sensor2);
 
@@ -153,10 +137,6 @@ void loop() {
     float derivative = (error - prevError) / deltaTime;
     float correction = (Kp * error) + (Ki * integral) + (Kd * derivative);
 
-    // Angled-approach gate: sensor reads "too far" (error > 0) but distance is
-    // actively decreasing (derivative < 0), meaning the robot is closing on the
-    // wall at an angle, not genuinely far from it. Cap correction so we don't
-    // steer further toward the wall.
     if (error > 0.0f && derivative < 0.0f) {
       correction = min(correction, 0.0f);
     }
@@ -177,8 +157,6 @@ void loop() {
       cmdRight = BASE_PWM + correction;
     }
 
-    // Floor at a minimum forward speed so neither track can reverse and
-    // pivot the robot into the wall.
     const int MIN_FORWARD_PWM = 100;
     cmdLeft = constrain(cmdLeft, MIN_FORWARD_PWM, (int)(800 * 6 / 7.2));
     cmdRight = constrain(cmdRight, MIN_FORWARD_PWM, (int)(800 * 6 / 7.2));
