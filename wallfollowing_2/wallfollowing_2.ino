@@ -48,7 +48,7 @@ float getFrontDistance() {
 }
 
 void setup() {
-  Serial.begin(115200);
+  // Serial.begin(115200);
 
   delay(2000);
 
@@ -62,7 +62,7 @@ void setup() {
   delay(500);
   initMotors();
 
-  Serial.println("System Ready.");
+  // Serial.println("System Ready.");
   isRunning = true;
   lastControlTime = millis();
 }
@@ -153,11 +153,11 @@ void loop() {
 
     // Steering logic
     if (followingRight) {
-      cmdLeft = BASE_PWM - correction;
-      cmdRight = BASE_PWM + correction;
-    } else {
       cmdLeft = BASE_PWM + correction;
       cmdRight = BASE_PWM - correction;
+    } else {
+      cmdLeft = BASE_PWM - correction;
+      cmdRight = BASE_PWM + correction;
     }
 
     const int MIN_FORWARD_PWM = 100;
@@ -168,11 +168,11 @@ void loop() {
     setRightTrack(cmdRight);
 
     // Debug info
-    Serial.print(followingRight ? "Wall:RIGHT" : "Wall:LEFT");
-    Serial.print(", Front:"); Serial.print(frontDist_cm);
-    Serial.print("cm, Dist:"); Serial.print(followingRight ? smoothedRight : smoothedLeft);
-    Serial.print("mm, L_PWM:"); Serial.print(cmdLeft);
-    Serial.print(", R_PWM:"); Serial.println(cmdRight);
+    // Serial.print(followingRight ? "Wall:RIGHT" : "Wall:LEFT");
+    // Serial.print(", Front:"); Serial.print(frontDist_cm);
+    // Serial.print("cm, Dist:"); Serial.print(followingRight ? smoothedRight : smoothedLeft);
+    // Serial.print("mm, L_PWM:"); Serial.print(cmdLeft);
+    // Serial.print(", R_PWM:"); Serial.println(cmdRight);
 
     prevError = error;
     lastControlTime = currentTime;
