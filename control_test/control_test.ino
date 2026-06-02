@@ -160,6 +160,14 @@ bool isJunction() {
   return (getIRValue(0) > 800 && getIRValue(lastIdx) > 800);
 }
 
+bool isBlank() {
+  readIRPosition();
+  for (uint8_t i = 0; i < getIRSensorCount(); i++) {
+    if (getIRValue(i) < 100) return false;
+  }
+  return true;
+}
+
 bool isNewJunction() {
   if (!isJunction()) return false;
   long tick = getTrackEncoder();
@@ -295,18 +303,22 @@ void runIntersectionTag() {
         stopTracks();
         t2State = 1;
         t2Junctions++;
-        Serial.print("[T2] Junction ");
-        Serial.println(t2Junctions);
+      } else if (isBlank()) {
+        stopTracks();
+        t2State = 2;
       }
       break;
     }
-    case 1: {  // JUNCTION — handle on next loop after stop
+    case 1: {  // JUNCTION — turn right then resume
       setLeftTrack(500);
       setRightTrack(0);
       t2State = 0;
       digitalWrite(LED_GREEN_PIN, LOW);
       digitalWrite(LED_RED_PIN, LOW);
       delay(100);
+      break;
+    }
+    case 2: {  // BLANK — exited base, done
       break;
     }
   }
