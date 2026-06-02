@@ -5,8 +5,8 @@
 static QTRSensors qtr;
 static const uint8_t kIRCount = 11;
 static const uint8_t kIRPins[kIRCount] = {
-  31, 30, 36, 
-  23, 28, 29, 24, 
+  31, 30, 36,
+  23, 28, 29, 24,
   37, 22, 33, 32};
 static uint16_t irValues[kIRCount];
 
@@ -38,10 +38,6 @@ static void readOneTOF(TOFSensor& sensor) {
       unsigned long dist = (unsigned long)sensor.buffer[8]
                          | ((unsigned long)sensor.buffer[9]  << 8)
                          | ((unsigned long)sensor.buffer[10] << 16);
-      // Serial.print(sensor.name);
-      // Serial.print(": ");
-      // Serial.print(dist);
-      // Serial.println(" mm");
       sensor.buffer[0] = 0x00;
     }
   }
@@ -64,9 +60,6 @@ void readUltrasonic() {
   digitalWrite(TRIG_FRONT, LOW);
   long duration = pulseIn(ECHO_FRONT, HIGH, 30000UL);
   float distCm = duration / 58.0f;
-  // Serial.print("Ultrasonic: ");
-  // Serial.print(distCm);
-  // Serial.println(" cm");
 }
 
 void initIRArray() {
@@ -76,28 +69,12 @@ void initIRArray() {
   delay(500);
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
-  // Serial.println("[IR] Calibrating — sweep all 12 sensors across the line...");
 
   for (uint16_t i = 0; i < 400; i++) {
     qtr.calibrate();
   }
 
   digitalWrite(LED_BUILTIN, LOW);
-  // Serial.println("[IR] Calibration complete.");
-
-  // Serial.print("[IR] MIN: ");
-  for (uint8_t i = 0; i < kIRCount; i++) {
-    // Serial.print(qtr.calibrationOn.minimum[i]);
-    // Serial.print(' ');
-  }
-  // Serial.println();
-
-  // Serial.print("[IR] MAX: ");
-  for (uint8_t i = 0; i < kIRCount; i++) {
-    // Serial.print(qtr.calibrationOn.maximum[i]);
-    // Serial.print(' ');
-  }
-  // Serial.println();
 
   delay(1000);
 }
@@ -107,19 +84,7 @@ void readIRArray() {
   if (millis() - lastRead < 100) return;
   lastRead = millis();
 
-  uint16_t position = qtr.readLineBlack(irValues);
-
-  for (uint8_t i = 0; i < kIRCount; i++) {
-    // Serial.print(irValues[i]);
-    // Serial.print('\t');
-  }
-
-  int err = 6000 - (int)position;
-  if (err < 0) err = -err;
-  // Serial.print("| Pos: ");
-  // Serial.print(position);
-  // Serial.print(" | Err: ");
-  // Serial.println(err);
+  qtr.readLineBlack(irValues);
 }
 
 uint16_t readIRPosition() {

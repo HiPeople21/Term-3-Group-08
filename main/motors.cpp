@@ -85,19 +85,11 @@ void rotatePlanter() {
   long error = targetPos - encoderPosPlanter;
   int cmd = (error > 5) ? planterLinearspeed : 0;
   mc.setSpeed(2, cmd);
-
-  static unsigned long lastPrint = 0;
-  if (millis() - lastPrint > 500) {
-    lastPrint = millis();
-    Serial.print("[Planter] encoder="); Serial.print(encoderPosPlanter);
-    Serial.print(" target="); Serial.print(targetPos);
-    Serial.print(" error="); Serial.println(error);
-  }
 }
 
 void stopPlanter() {
   mc.setSpeed(2, 0);
-  targetPos = encoderPosPlanter; // cancel any pending rotation
+  targetPos = encoderPosPlanter;
 }
 
 void triggerPlanterRotation() {
@@ -132,10 +124,10 @@ void startTurn(float degrees) {
   interrupts();
 
   turnDirSign = (degrees > 0) ? 1 : -1;
-  if (turnDirSign > 0) {   // right: right track back, left track forward
+  if (turnDirSign > 0) {
     setRightTrack(-turnSpeed);
     setLeftTrack(turnSpeed);
-  } else {                 // left: right track forward, left track back
+  } else {
     setRightTrack(turnSpeed);
     setLeftTrack(-turnSpeed);
   }

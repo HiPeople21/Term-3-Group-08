@@ -621,7 +621,7 @@ void runRevival() {
     int speed = map((long)(dist * 10), 30, 300, 150, baseSpeed);
     speed = constrain(speed, 150, baseSpeed);
     
-    (speed);
+    driveStraight(speed);
   } else {
     driveStraight(500);
   }
