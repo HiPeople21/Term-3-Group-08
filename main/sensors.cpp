@@ -10,8 +10,8 @@ static const uint8_t kIRPins[kIRCount] = {
   37, 22, 33, 32};
 static uint16_t irValues[kIRCount];
 
-#define TRIG_FRONT 44
-#define ECHO_FRONT 42
+#define TRIG_FRONT 42
+#define ECHO_FRONT 44
 
 struct TOFSensor {
   Stream& port;

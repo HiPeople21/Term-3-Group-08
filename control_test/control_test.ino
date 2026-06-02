@@ -120,6 +120,8 @@ int  oaResumeJunctions = 0;
 
 // ===== Task 8: Revival =====
 bool revivalDone = false;
+int  revivalCloseCount = 0;
+int  revivalTimeoutCount = 0;
 
 // ================================================================
 // UTILITY FUNCTIONS
@@ -253,6 +255,8 @@ void resetModeState() {
   oaResumeJunctions = 0;
 
   revivalDone = false;
+  revivalCloseCount = 0;
+  revivalTimeoutCount = 0;
 }
 
 // ================================================================
@@ -610,20 +614,32 @@ void runRevival() {
 
   float dist = getFrontDistanceCm();
 
-  if (dist > 0 && dist < 3.0) {
+  if (dist > 0 && dist < 30.0) {
+    revivalCloseCount++;
+    revivalTimeoutCount = 0;
+  } else if (dist >= 999.0) {
+    revivalTimeoutCount++;
+  } else {
+    revivalCloseCount = 0;
+    revivalTimeoutCount = 0;
+  }
+
+  bool approaching = revivalCloseCount >= 3;
+
+  if (approaching && revivalTimeoutCount >= 5) {
     stopTracks();
     revivalDone = true;
-    // Serial.println("[T8] Contact made!");
     return;
   }
 
-  if (dist > 0 && dist < 30.0) {
-    int speed = map((long)(dist * 10), 30, 300, 150, baseSpeed);
-    speed = constrain(speed, 150, baseSpeed);
-    
+  if (approaching && dist > 0 && dist < 30.0) {
+    const int revivalMinSpeed = (int)(450 * 6 / 7.2);
+    const int revivalMaxSpeed = (int)(800 * 6 / 7.2);
+    int speed = map((long)(dist * 10), 30, 300, revivalMinSpeed, revivalMaxSpeed);
+    speed = constrain(speed, revivalMinSpeed, revivalMaxSpeed);
     driveStraight(speed);
   } else {
-    driveStraight(500);
+    driveStraight((int)(800 * 6 / 7.2));
   }
 }
 
