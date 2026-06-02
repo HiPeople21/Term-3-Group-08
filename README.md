@@ -119,30 +119,17 @@ See the flowchart documents for detailed diagrams of each behaviour:
 
 | Date | Test | Result | Notes |
 |------|------|--------|-------|
-| | IR calibration | | |
-| | Line following (straight) | | |
-| | Line following (curves) | | |
-| | Junction detection | | |
-| | RFID reading | | |
-| | Airlock open request | | |
-| | Planter rotation | | | is 
-| | Kill switch (hardware) | | |
-| | Kill switch (WiFi) | | |
-| | Heartbeat timeout | | |
-| | Encoder-based driving | | |
-| | Point turn accuracy | | |
+| N/A | IR calibration | N/A | Calibrated immediately before usage of the robot as this achieves the most accurate results. This has the downsides of taking longer to test each iteration of the code|
+| 21/05/2026 | Line following (straight) | Successful | Kp = 1. Follows the line successfully, however junctions need to be hardcoded to have a more accurate approach |
+| 21/05/2026 | Line following (curves) | Successful | Kp = 1. Follows the curve successfully, including both gentle curves and harsh corners.|
+| 26/05/2026 | Junction detection | Successful | The isJunction() function which checks if the 2 end IR sensors are activated returned true consistently at junctions. The temporary driveStraight(int speed) function is used to go through the junction instead of line following in order to be consistent and accurate. |
+| 28/04/2026 | RFID reading | Successful | The RFID Scanner was able to both detect and read RFID codes. The range of detection was consistently reading at approximately 0 cm to 2 cm |
+| 26/05/2026 | Airlock open request | Successful | The MiniMessenger library was implemented succesfully, and the airlock was opened. Some minor changes were made to the library on 28/05/2026, so the code was altered, and then tested successfully again |
+| 07/05/2026 | Planter rotation | Partially Successful | The planter spun successfully, and remained aligned after all 5 seeds were released. However, after further testing, we noticed minor allignement issues due to loose screws, and some wear on the wood. In order to fix this, we replaced the wooden planter with acryllic and tightened the screws so the motor remained perpendicular. After the fixes were made, the planter was fully functional.| 
+| 19/05/2026 | Kill switch (hardware) | Successful | The Kill switch was very responsive, and disabled all 3 motors from running until it was pressed again |
+| 20/05/2026 | Kill switch (WiFi) | Successful | Disabled and enabling via the website worked well, all motors stopped, and the light on top turned red. |
+| 28/05/2026 | Heartbeat timeout | Successful | When no heartbeat was detected within 1 second, the robot deactivates. Otherwise, it succesfully ran. If it recieves a heartbeat and enabled = 0, it stopped.|
+| 07/05/2026 | Encoder-based driving | Successful | The robot was able to drive a predetermined distance using the encoders when a command was sent using the Serial.|
+| 01/06/2026 | Point turn accuracy | Successful | 90 Degree turns were performed on the arena successfully, with very small error. |
+| 02/06/2026 | Revive Mechanism | Successful | The full revival mechanism was functional, including detection and speed reduction. |
 
-## Known Limitations
-
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Line following | | |
-| RFID + planting | | |
-| Base exit (airlock) | | |
-| Kill switch (local + WiFi) | | |
-| TOF distance sensors | | |
-| Wall following | | |
-| Obstacle avoidance | | |
-| Return to base | | |
-| Dead reckoning | | |
