@@ -30,18 +30,20 @@ static int  reviveBtnState  = HIGH;
 static int  lastReviveState = HIGH;
 static unsigned long lastReviveDebounce = 0;
 
-// --- Motor speed (manual control) ---
-static const int trackSpeed = 800 * 6 / 7.2;
+// --- Voltage compensation: 6V motor rating / 7.2V battery ---
+const float voltageScale = 6.0 / 7.2;
 
+// --- Motor speed (manual control) ---
+static const int trackSpeed = 800 * voltageScale;
 
 // --- Line Following / State Machine ---
 float Kp = 1.0;
 float Ki = 0.0;
 float Kd = 0.0;
 
-const int baseSpeed = 500 * 6 / 7.2;
-const int maxSpeed  = 800 * 6 / 7.2;
-const int minSpeed  = -(800 * 6 / 7.2);
+const int baseSpeed = 500 * voltageScale;
+const int maxSpeed  = 800 * voltageScale;
+const int minSpeed  = -(800 * voltageScale);
 const int setpoint  = 5500;
 
 const long ticksToHole  = 1355;
@@ -367,7 +369,7 @@ void loop() {
           }
 
           case JUNCTION_HANDLING: {
-            driveStraight(600 * 6 / 7.2);
+            driveStraight(600 * voltageScale);
             delay(200);
             stopTracks();
 
@@ -380,7 +382,7 @@ void loop() {
 
           case WAITING_FOR_RFID: {
             if (isJunction()) {
-              driveStraight(600 * 6 / 7.2);
+              driveStraight(600 * voltageScale);
             } else {
               runLineFollower();
             }
@@ -415,7 +417,7 @@ void loop() {
             long encerror     = tickTarget - currentTicks;
 
             if (encerror > 5) {
-              driveStraight(600 * 6 / 7.2);
+              driveStraight(600 * voltageScale);
             } else {
               stopTracks();
               planterTarget    = getPlanterEncoder() + ticksToPlant;
@@ -429,7 +431,7 @@ void loop() {
             long planterPos = getPlanterEncoder();
 
             if (abs(planterPos - planterTarget) > 5) {
-              setPlanter(500 * 6 / 7.2);
+              setPlanter(500 * voltageScale);
             } else {
               setPlanter(0);
               delay(500);

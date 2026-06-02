@@ -2,6 +2,8 @@
 #include <Wire.h>
 #include <Motoron.h>
 
+static const float voltageScale = 6.0 / 7.2; // 6V motor rating / 7.2V battery
+
 #define M1A 43
 #define M1B 41
 #define M2A 47
@@ -113,7 +115,7 @@ long getPlanterEncoder() {
 static long turnStartTicks  = 0;
 static long turnTicksNeeded = 0;
 static int  turnDirSign     = 0;
-static const int turnSpeed  = (int)(800 * 6 / 7.2);
+static const int turnSpeed  = (int)(800 * voltageScale);
 
 void startTurn(float degrees) {
   float arcLength = (tracksDistance / 2.0f) * abs(degrees) * PI / 180.0f * 4.75/4;
