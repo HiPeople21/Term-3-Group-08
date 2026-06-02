@@ -17,10 +17,12 @@ struct TOFSensor {
   Stream& port;
   const char* name;
   uint8_t buffer[16];
+  unsigned long current_distance;
+  unsigned long last_update_time;
 };
 
-static TOFSensor tofLeft = {Serial1, "TOF-Left", {0}};
-static TOFSensor tofRight  = {Serial4, "TOF-Right",  {0}};
+static TOFSensor tofLeft  = {Serial1, "TOF-Left",  {0}, 0, 0};
+static TOFSensor tofRight = {Serial4, "TOF-Right", {0}, 0, 0};
 
 void initSensors() {
   pinMode(TRIG_FRONT, OUTPUT);
@@ -35,9 +37,10 @@ static void readOneTOF(TOFSensor& sensor) {
     for (int i = 0; i < 15; i++) sensor.buffer[i] = sensor.buffer[i + 1];
     sensor.buffer[15] = c;
     if (sensor.buffer[0] == 0x57 && sensor.buffer[1] == 0x00 && sensor.buffer[2] == 0xFF) {
-      unsigned long dist = (unsigned long)sensor.buffer[8]
-                         | ((unsigned long)sensor.buffer[9]  << 8)
-                         | ((unsigned long)sensor.buffer[10] << 16);
+      sensor.current_distance = (unsigned long)sensor.buffer[8]
+                              | ((unsigned long)sensor.buffer[9]  << 8)
+                              | ((unsigned long)sensor.buffer[10] << 16);
+      sensor.last_update_time = millis();
       sensor.buffer[0] = 0x00;
     }
   }
@@ -48,18 +51,27 @@ void readTOFSensors() {
   readOneTOF(tofRight);
 }
 
-void readUltrasonic() {
-  static unsigned long lastRead = 0;
-  if (millis() - lastRead < 100) return;
-  lastRead = millis();
+unsigned long getTOFLeftDist()  { return tofLeft.current_distance; }
+unsigned long getTOFRightDist() { return tofRight.current_distance; }
+bool isTOFLeftFresh()  { return (millis() - tofLeft.last_update_time) < 100; }
+bool isTOFRightFresh() { return (millis() - tofRight.last_update_time) < 100; }
 
+float getFrontDistanceCm() {
   digitalWrite(TRIG_FRONT, LOW);
   delayMicroseconds(2);
   digitalWrite(TRIG_FRONT, HIGH);
   delayMicroseconds(10);
   digitalWrite(TRIG_FRONT, LOW);
-  long duration = pulseIn(ECHO_FRONT, HIGH, 30000UL);
-  float distCm = duration / 58.0f;
+  long duration = pulseIn(ECHO_FRONT, HIGH, 6000);
+  if (duration == 0) return 999.0;
+  return duration / 58.0;
+}
+
+void readUltrasonic() {
+  static unsigned long lastRead = 0;
+  if (millis() - lastRead < 100) return;
+  lastRead = millis();
+  getFrontDistanceCm();
 }
 
 void initIRArray() {
@@ -75,7 +87,6 @@ void initIRArray() {
   }
 
   digitalWrite(LED_BUILTIN, LOW);
-
   delay(1000);
 }
 
@@ -83,7 +94,6 @@ void readIRArray() {
   static unsigned long lastRead = 0;
   if (millis() - lastRead < 100) return;
   lastRead = millis();
-
   qtr.readLineBlack(irValues);
 }
 
