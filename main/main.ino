@@ -218,7 +218,7 @@ bool checkForHole() {
   uint8_t midIdx      = getIRSensorCount() / 2;
   int     middleValue = getIRValue(midIdx);
 
-  bool inHole     = middleValue >= 100 && middleValue <= 400;
+  bool inHole = middleValue >= 100 && middleValue <= 400;
   bool wasOutside = prevMiddleValue < 100 || prevMiddleValue > 400;
 
   prevMiddleValue = middleValue;
@@ -240,7 +240,7 @@ bool isBlank(){
       count += 1;
     }
   }
-  if(count == 0){
+  if(count == 11){
     return true;
   } else {
     return false;
@@ -387,6 +387,7 @@ void loop() {
   if (running && !killed) {
     // Serial.println(state);
     switch (stage){
+      
       case BASE: {
         switch(state){
           case FOLLOWING: {
@@ -402,26 +403,14 @@ void loop() {
               mfrc522.PICC_HaltA();
               mfrc522.PCD_StopCrypto1();
               stopTracks();
-
-              // Serial.println("RFID confirmed");
-
               openAirlock(detectedUID, 'A');
-              // for (int i = 0; i < 2; i++) {
-              //   digitalWrite(LED_GREEN_PIN, LOW);
-              //   delay(100);
-              //   digitalWrite(LED_GREEN_PIN, HIGH);
-              //   delay(150);
-              // }
             }
             if (isJunction()) {
               stopTracks();
               state = JUNCTION_HANDLING;
-              // Serial.println("Junction detected");
-              turnInBase += 1;
-            }else if(isBlank()){
-              stopTracks();
-              stage = BLANK;
-              // Serial.println("Switching to blank mode");
+
+            } else if(isBlank()){
+              driveStraight(500);
             }
 
 
@@ -429,11 +418,7 @@ void loop() {
           }
           case JUNCTION_HANDLING: {
             angleRight(500);
-            state = FOLLOWING;
-            digitalWrite(LED_GREEN_PIN, LOW);
-            digitalWrite(LED_RED_PIN, LOW);
-            delay(100);
-            
+            delay(200);
             break;
           }
            
@@ -443,7 +428,7 @@ void loop() {
         case BLANK:
           // driveStraight(500);
           // if(!isBlank()){
-            // stage = LINED;
+            //;
             state = FOLLOWING;
           // }
           break;
