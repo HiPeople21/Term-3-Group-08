@@ -48,6 +48,55 @@ See the flowchart documents for detailed diagrams of each behaviour:
 - [FLOWCHARTS2.md](FLOWCHARTS2.md) - Base exit logic, line following and planting mission
 - [FLOWCHARTS3.md](FLOWCHARTS3.md) - Kill switch and safety handling, WiFi/MQTT communication
 
+### Software Overview Diagram
+
+```mermaid
+flowchart TD
+    subgraph main.ino
+        LOOP[Main Loop] --> KS[Kill Switch Check]
+        LOOP --> SM[State Machine]
+        SM --> BASE[BASE Stage\nLine follow in base\nJunction handling\nRFID → open airlock]
+        SM --> LINED[LINED Stage\nLine follow in arena\nHole detection → RFID\nFertility check → Plant]
+        SM --> BLANK[BLANK Stage]
+        SM --> RET[RETURNING Stage]
+    end
+
+    subgraph motors.cpp
+        MOT[Motoron I2C\n0x12 on Wire1]
+        MOT --> LT[Left Track\nMotor 3]
+        MOT --> RT[Right Track\nMotor 1]
+        MOT --> PL[Planter\nMotor 2]
+        ENC[Encoders\nTrack + Planter]
+    end
+
+    subgraph sensors.cpp
+        IR[IR Array\n11 sensors\nQTRSensors]
+        TOF_L[TOF Left\nSerial1]
+        TOF_R[TOF Right\nSerial4]
+        US[Ultrasonic\nTrig 42 / Echo 44]
+    end
+
+    subgraph wifi_utils.cpp
+        MQTT[MiniMessenger\nMQTT via WiFi]
+        MQTT --> KILL_W[Remote Kill\nDisable / Emergency]
+        MQTT --> HB[Heartbeat\nTimeout → auto-kill]
+        MQTT --> FERT[Fertility Check\n+ Callback]
+        MQTT --> AIR[Airlock Requests]
+        MQTT --> REG[Registration\nEvery 5s]
+    end
+
+    RFID[MFRC522\nI2C 0x28 on Wire1]
+
+    LOOP --> MOT
+    LOOP --> IR
+    LOOP --> RFID
+    LOOP --> MQTT
+    KS --> |Hardware pin 39| MOT
+    KS --> |WiFi kill| MQTT
+
+    parser.cpp --> |Parses key=value\nserver messages| MQTT
+```
+
 ### Algorithm Descriptions
 
 **PID Line Following:** The 11-sensor IR array returns a weighted position value from 0 to 11000, where 5500 is centred on the line. A proportional controller computes the error as `setpoint - position` and applies a correction to the left and right track speeds - if the line drifts left, the right track slows and the left track speeds up, and vice versa. We found that P-only control (Kp=1.0, Ki=0, Kd=0) was sufficient for smooth tracking without oscillation.
