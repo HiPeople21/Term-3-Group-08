@@ -44,9 +44,9 @@ The `main/` directory is where the code used in the finals will live. In this di
 
 See the flowchart documents for detailed diagrams of each behaviour:
 
-- [FLOWCHARTS1.md](FLOWCHARTS1.md) — Main loop and stage transitions
-- [FLOWCHARTS2.md](FLOWCHARTS2.md) — Base exit logic, line following and planting mission
-- [FLOWCHARTS3.md](FLOWCHARTS3.md) — Kill switch and safety handling, WiFi/MQTT communication
+- [FLOWCHARTS1.md](FLOWCHARTS1.md) - Main loop and stage transitions
+- [FLOWCHARTS2.md](FLOWCHARTS2.md) - Base exit logic, line following and planting mission
+- [FLOWCHARTS3.md](FLOWCHARTS3.md) - Kill switch and safety handling, WiFi/MQTT communication
 
 ### Component Interaction
 
@@ -75,28 +75,26 @@ See the flowchart documents for detailed diagrams of each behaviour:
 
 ## Calibration
 
-<!-- Fill in your calibration notes below -->
 
 ### IR Array Calibration
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Number of sensors | 11 | |
-| Calibration sweeps | 400 | |
-| Calibration method | | _e.g. manual sweep across black line on white surface_ |
-| Surface type | | _e.g. white board with black electrical tape_ |
+| Number of sensors | 11 | We originally wanted to use the given 9 channel IR array with two additional 2 channel IR array at a wider distance to better handle PID control, since this would mean the robot would oscillate less to try find the line. However, one of the edge sensors on the 9 channel IR array wasn't working, so we removed it from the code. We also decided to remove the sensor from the opposite side to balance the IR sensors on each side. |
+| Calibration sweeps | 400 | This was the value used in the example in the official `QTRSensors` repository. The file can be found [here](https://github.com/pololu/qtr-sensors-arduino/blob/master/examples/QTRRCExample/QTRRCExample.ino) |
+| Calibration method | | Manual sweep across black line on the arena surface. |
 | Min/max values observed | | _e.g. min ~50, max ~2500_ |
 
 ### Encoder / Distance Calibration
 
 | Parameter | Value | How it was measured |
 |-----------|-------|---------------------|
-| Counts per revolution | 1400 | |
-| Wheel diameter | 38.5 mm | |
-| Track distance (between tracks) | 170 mm | |
-| IR-to-hole distance | 116.5 mm / 1355 ticks | |
-| Turn correction factor | 4.75/4 | |
-| Ticks for 60° planter rotation | 233 | |
+| Counts per revolution | 1400 | When we were testing the planter mechanism, we had try many values for the encoder ticks for 360°. 1200 was too little, but 1600 was too much. Eventually, we narrowed it down to 1400, which worked very well. A week or two later, we learnt that the motor was made by DFRobot, and when we checked their website it said "average output number of pulses can reach up to 7*2*100 pulses per revolution". |
+| Wheel diameter | 38.5 mm | Vernier caliper |
+| Track distance (between tracks) | 170 mm | Vernier caliper |
+| IR-to-hole distance | 116.5 mm / 1355 ticks | Vernier caliper |
+| Turn correction factor | 4.75/4 | When testing discrete 90° turning for the robot, we found that running it 5 times led to an approximate 360° turn. Hence, we added the scale factor. 5/4 was too high, 4.8/4 was still slightly too high, and 4.75/4 landed very close to 90°. |
+| Ticks for 60° planter rotation | 233 | 1400 / 6 = 233.3333... ≈ 233 |
 
 ### PID Tuning
 
@@ -106,8 +104,6 @@ See the flowchart documents for detailed diagrams of each behaviour:
 | Wall following (control_test) | 2.5 | 0.0 | 2.0 | |
 
 ## Testing Evidence
-
-<!-- Add rows for each test you've run. Link to photos/videos if available. -->
 
 | Date | Test | Result | Notes |
 |------|------|--------|-------|
@@ -126,7 +122,6 @@ See the flowchart documents for detailed diagrams of each behaviour:
 
 ## Known Limitations
 
-<!-- Fill in what didn't work or is incomplete -->
 
 | Feature | Status | Notes |
 |---------|--------|-------|
