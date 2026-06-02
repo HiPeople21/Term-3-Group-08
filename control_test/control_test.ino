@@ -105,13 +105,14 @@ bool rampDone = false;
 unsigned long wallLostAt = 0;
 
 // ===== Task 6: Wall Following PID =====
-float Kp_wall = 2.5, Ki_wall = 0.0, Kd_wall = 2.0;
-const int WALL_TARGET_MM  = 100;
+float Kp_wall = 4.0, Ki_wall = 0.0, Kd_wall = 7.0;
+const int WALL_TARGET_MM  = 150;
 const int WALL_BASE_PWM   = 550;
 const int WALL_DEADBAND   = 60;
 float integral_wall = 0, prevError_wall = 0;
 unsigned long lastWallControl = 0;
-float smoothedRight = 100.0, smoothedLeft = 100.0;
+float smoothedRight = 150.0, smoothedLeft = 150.0;
+int wallLockedSide = 0; // 0 = not locked, 1 = right, -1 = left
 
 // ===== Task 7: Obstacle Avoidance =====
 int  oaStep          = 0;
@@ -179,6 +180,16 @@ bool isNewJunction() {
 void driveStraight(int speed) {
   setLeftTrack(speed);
   setRightTrack(speed);
+}
+
+void angleLeft(int speed) {
+  setLeftTrack(0);
+  setRightTrack(speed);
+}
+
+void angleRight(int speed) {
+  setLeftTrack(speed);
+  setRightTrack(0);
 }
 
 void startDriveDist(long mm) {
@@ -257,6 +268,7 @@ void resetModeState() {
   lastWallControl = millis();
   smoothedRight   = WALL_TARGET_MM;
   smoothedLeft    = WALL_TARGET_MM;
+  wallLockedSide  = 0;
 
   oaStep           = 0;
   oaStepStarted    = false;
@@ -296,29 +308,22 @@ void runIntersectionTag() {
         mfrc522.PICC_HaltA();
         mfrc522.PCD_StopCrypto1();
         stopTracks();
+        delay(200);
         openAirlock(uid, 'A');
       }
 
       if (isJunction()) {
         stopTracks();
         t2State = 1;
-        t2Junctions++;
       } else if (isBlank()) {
-        stopTracks();
-        t2State = 2;
+        driveStraight(500);
       }
       break;
     }
-    case 1: {  // JUNCTION — turn right then resume
-      setLeftTrack(500);
-      setRightTrack(0);
+    case 1: {  // JUNCTION — angle right then resume
+      angleRight(500);
+      delay(200);
       t2State = 0;
-      digitalWrite(LED_GREEN_PIN, LOW);
-      digitalWrite(LED_RED_PIN, LOW);
-      delay(100);
-      break;
-    }
-    case 2: {  // BLANK — exited base, done
       break;
     }
   }
@@ -422,40 +427,92 @@ void runDeadReckoning() {
 
 // ================================================================
 // TASK 5: Ramp Incline/Decline Control
-// Drive through the airlock tunnel, centering between walls using
-// TOF sensors.  Stop when both walls disappear (entered arena).
+// PID wall following through the airlock tunnel using TOF sensors.
+// Stops when both walls disappear (entered arena).
 // ================================================================
 
 void runRamp() {
   if (rampDone) return;
 
   readTOFSensors();
-  unsigned long dL = getTOFLeftDist();
-  unsigned long dR = getTOFRightDist();
-  bool seeL = isTOFLeftFresh() && dL > 0 && dL < 500;
-  bool seeR = isTOFRightFresh() && dR > 0 && dR < 500;
 
-  if (!seeL && !seeR) {
+  unsigned long currentTime = millis();
+  float deltaTime = (currentTime - lastWallControl) / 1000.0;
+  if (deltaTime < 0.02) return;
+
+  unsigned long dR = getTOFRightDist();
+  unsigned long dL = getTOFLeftDist();
+  bool seeR = isTOFRightFresh() && dR > 0 && dR < 500;
+  bool seeL = isTOFLeftFresh()  && dL > 0 && dL < 500;
+
+  // Lock onto the closer wall on first valid reading
+  if (wallLockedSide == 0) {
+    if (seeR && seeL) {
+      wallLockedSide = (dR <= dL) ? 1 : -1;
+    } else if (seeR) {
+      wallLockedSide = 1;
+    } else if (seeL) {
+      wallLockedSide = -1;
+    }
+  }
+
+  // Only use the locked wall's sensor
+  bool seeWall = (wallLockedSide == 1) ? seeR : seeL;
+  float* smoothedWall = (wallLockedSide == 1) ? &smoothedRight : &smoothedLeft;
+  unsigned long wallDist = (wallLockedSide == 1) ? dR : dL;
+
+  if (!seeWall) {
     if (wallLostAt == 0) wallLostAt = millis();
     if (millis() - wallLostAt > 500) {
       stopTracks();
       rampDone = true;
-      // Serial.println("[T5] Exited airlock");
       return;
     }
-    driveStraight(baseSpeed);
-  } else {
-    wallLostAt = 0;
-    int speed = (int)(500 * 6 / 7.2);
-    if (seeL && seeR) {
-      int error = (int)dL - (int)dR;
-      int correction = constrain(error / 2, -150, 150);
-      setLeftTrack(constrain(speed + correction, 100, maxSpeed));
-      setRightTrack(constrain(speed - correction, 100, maxSpeed));
-    } else {
-      driveStraight(speed);
-    }
+    driveStraight(WALL_BASE_PWM);
+    integral_wall   = 0;
+    lastWallControl = currentTime;
+    return;
   }
+
+  wallLostAt = 0;
+
+  *smoothedWall = 0.3f * (float)wallDist + 0.7f * (*smoothedWall);
+
+  float error = *smoothedWall - WALL_TARGET_MM;
+  bool followingRight = (wallLockedSide == 1);
+
+  integral_wall += error * deltaTime;
+  integral_wall = constrain(integral_wall, -300.0f, 300.0f);
+  float derivative = (error - prevError_wall) / deltaTime;
+  float correction = (Kp_wall * error) + (Ki_wall * integral_wall) + (Kd_wall * derivative);
+
+  if (error > 0.0f && derivative < 0.0f) {
+    correction = min(correction, 0.0f);
+  }
+
+  if (abs(error) > 5.0f) {
+    if (correction > 0) correction += WALL_DEADBAND;
+    if (correction < 0) correction -= WALL_DEADBAND;
+  }
+
+  int cmdL = WALL_BASE_PWM, cmdR = WALL_BASE_PWM;
+  if (followingRight) {
+    cmdL += (int)correction;
+    cmdR -= (int)correction;
+  } else {
+    cmdL -= (int)correction;
+    cmdR += (int)correction;
+  }
+
+  const int MIN_FWD = 100;
+  cmdL = constrain(cmdL, MIN_FWD, maxSpeed);
+  cmdR = constrain(cmdR, MIN_FWD, maxSpeed);
+
+  setLeftTrack(cmdL);
+  setRightTrack(cmdR);
+
+  prevError_wall  = error;
+  lastWallControl = currentTime;
 }
 
 // ================================================================
@@ -485,33 +542,39 @@ void runWallFollowing() {
   bool seeR = isTOFRightFresh() && dR > 0 && dR < 500;
   bool seeL = isTOFLeftFresh()  && dL > 0 && dL < 500;
 
-  if (seeR) smoothedRight = 0.3f * (float)dR + 0.7f * smoothedRight;
-  if (seeL) smoothedLeft  = 0.3f * (float)dL + 0.7f * smoothedLeft;
+  // Lock onto the closer wall on first valid reading
+  if (wallLockedSide == 0) {
+    if (seeR && seeL) {
+      wallLockedSide = (dR <= dL) ? 1 : -1;
+    } else if (seeR) {
+      wallLockedSide = 1;
+    } else if (seeL) {
+      wallLockedSide = -1;
+    }
+  }
 
-  float error = 0.0;
-  bool followingRight = true;
+  // Only use the locked wall's sensor
+  bool seeWall = (wallLockedSide == 1) ? seeR : seeL;
+  float* smoothedWall = (wallLockedSide == 1) ? &smoothedRight : &smoothedLeft;
+  unsigned long wallDist = (wallLockedSide == 1) ? dR : dL;
 
-  if (seeR && seeL) {
-    followingRight = (smoothedRight <= smoothedLeft);
-    error = (followingRight ? smoothedRight : smoothedLeft) - WALL_TARGET_MM;
-  } else if (seeR) {
-    error = smoothedRight - WALL_TARGET_MM;
-  } else if (seeL) {
-    followingRight = false;
-    error = smoothedLeft - WALL_TARGET_MM;
-  } else {
+  if (!seeWall) {
     driveStraight(WALL_BASE_PWM);
     integral_wall   = 0;
     lastWallControl = currentTime;
     return;
   }
 
+  *smoothedWall = 0.3f * (float)wallDist + 0.7f * (*smoothedWall);
+
+  float error = *smoothedWall - WALL_TARGET_MM;
+  bool followingRight = (wallLockedSide == 1);
+
   integral_wall += error * deltaTime;
   integral_wall = constrain(integral_wall, -300.0f, 300.0f);
   float derivative = (error - prevError_wall) / deltaTime;
   float correction = (Kp_wall * error) + (Ki_wall * integral_wall) + (Kd_wall * derivative);
 
-  // Angled-approach gate: closing on wall at an angle, don't steer further in
   if (error > 0.0f && derivative < 0.0f) {
     correction = min(correction, 0.0f);
   }

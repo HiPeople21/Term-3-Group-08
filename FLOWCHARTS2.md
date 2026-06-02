@@ -5,20 +5,18 @@ flowchart TD
     A[BASE: FOLLOWING] --> B[runLineFollower\nPID line tracking]
     B --> C{RFID tag\ndetected?}
     C -- yes --> D[read UID]
-    D --> E[stopTracks]
+    D --> E[stopTracks + delay 200ms]
     E --> F[openAirlock via WiFi/MQTT]
     F --> A
 
     C -- no --> G{isJunction?\nboth outer IR > 800}
     G -- yes --> H[stopTracks]
     H --> I[JUNCTION_HANDLING]
-    I --> J[angleRight at 500 PWM]
-    J --> K[turnInBase += 1]
-    K --> A
+    I --> J[angleRight at 500 PWM\ndelay 200ms]
+    J --> A
 
     G -- no --> L{isBlank?\nall IR sensors dark}
-    L -- yes --> M[stopTracks]
-    M --> N[stage = BLANK]
+    L -- yes --> M[driveStraight at 500 PWM\nkeep driving through gap]
     L -- no --> A
 ```
 
