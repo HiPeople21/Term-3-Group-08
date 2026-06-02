@@ -113,7 +113,7 @@ See the flowchart documents for detailed diagrams of each behaviour:
 | Controller | Kp | Ki | Kd | Notes |
 |------------|----|----|-----|-------|
 | Line following | 1.0 | 0.0 | 0.0 |Samll PID parameters could't make the robot turn due to high friction between the rubber tracks and the ground  |
-| Wall following (control_test) | 4.0 | 0.0 | 7.0 ||
+| Wall following (control_test) | 4.0 | 0.0 | 7.0 |High $K_d$ is applied to reduce oscillations near the wall during the control test.|
 
 ## Testing Evidence
 
@@ -125,7 +125,7 @@ See the flowchart documents for detailed diagrams of each behaviour:
 | | Junction detection | | |
 | | RFID reading | | |
 | | Airlock open request | | |
-| | Planter rotation | | |
+| | Planter rotation | | | is 
 | | Kill switch (hardware) | | |
 | | Kill switch (WiFi) | | |
 | | Heartbeat timeout | | |
