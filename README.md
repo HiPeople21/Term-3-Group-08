@@ -113,7 +113,7 @@ See the flowchart documents for detailed diagrams of each behaviour:
 | Controller | Kp | Ki | Kd | Notes |
 |------------|----|----|-----|-------|
 | Line following | 1.0 | 0.0 | 0.0 | |
-| Wall following (control_test) | 4.0 | 0.0 | 7.0 |  |
+| Wall following (control_test) | 4.0 | 0.0 | 7.0 |Samll PID parameters could't make the robot turn due to high friction between the rubber track and ground  |
 
 ## Testing Evidence
 
