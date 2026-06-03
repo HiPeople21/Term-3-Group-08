@@ -6,14 +6,19 @@
 
 static MiniMessenger messenger;
 static bool systemEnabled = true;
+static bool emergencyFlag = false;
+static int serverTimeLeft = -1;
 static unsigned long lastRegisterMs = 0;
-static const char* BoardId = "team8";
+static const char* BoardId = "TARS";
 bool isFertile = false;
 
 unsigned long lastHeartbeatMs = 0;
-const unsigned long HEARTBEAT_TIMEOUT_MS = 1000;
+const unsigned long HEARTBEAT_TIMEOUT_MS = 10000;
 
 std::map<std::pair<int,int>, std::map<String, String>> grid;
+
+// 9x9 occupancy map: 0=Sterile, 1=Fertile, 2=Seeded, 3=Unexplored
+static uint8_t gridState[9][9];
 
 String UIDs[] = {
   "C3DFAA41",
@@ -107,11 +112,12 @@ void setupGrid() {
       grid[{i, j}]["UID"] = "NULL";
     }
   }
+  memset(gridState, 3, sizeof(gridState));
 }
 
-static void (*fertilityCallback)(bool) = nullptr;
+static void (*fertilityCallback)(bool, int, int) = nullptr;
 
-void setFertilityCallback(void (*cb)(bool fertile)) {
+void setFertilityCallback(void (*cb)(bool fertile, int x, int y)) {
   fertilityCallback = cb;
 }
 
@@ -143,7 +149,6 @@ void reviveRequest(int target_team, String target_board) {
   messenger.sendToBoard("server", reg);
 }
 
-
 void getMap() {
   char reg[64];
   snprintf(reg, sizeof(reg), "type=getMap board_id=%s", BoardId);
@@ -158,7 +163,7 @@ void register_bot() {
 }
 
 bool isMessageValid(String str) {
-    for (int i = 0; i < str.length(); i++) {
+    for (unsigned int i = 0; i < str.length(); i++) {
         char c = str[i];
         if ((c < 32 || c > 126) && c != '\n' && c != '\r') {
             return false;
@@ -174,14 +179,34 @@ static void onMessage(const MessageMetadata& metadata, const uint8_t* payload, s
   if (msg.length() == 0) return;
   if (!isMessageValid(msg)) return;
 
+  // 1. Team Status Broadcast (6 bytes)
+  //    [0]=queueExit [1]=airlockBBusy [2]=queueEnter
+  //    [3]=airlockABusy [4]=emergency [5]=reEntryRequested
   if (length == 6) {
+    if (payload[4] == 1) {
+      emergencyFlag = true;
+      systemEnabled = false;
+    } else if (payload[4] == 0 && emergencyFlag) {
+      emergencyFlag = false;
+      systemEnabled = true;
+    }
     return;
   }
 
+  // 2. Occupancy Map (21 bytes binary)
+  //    81 cells × 2 bits = 162 bits, packed little-endian into 21 bytes
+  //    Cell states: 0=Sterile, 1=Fertile, 2=Seeded, 3=Unexplored
   if (length == 21) {
-      return;
+    for (int i = 0; i < 81; i++) {
+      int byteIdx = (i * 2) / 8;
+      int bitOff  = (i * 2) % 8;
+      uint8_t state = (payload[byteIdx] >> bitOff) & 0x03;
+      gridState[i / 9][i % 9] = state;
+    }
+    return;
   }
 
+  // 3. Text messages
   auto commandMap = parseToMap(msg);
 
   if (commandMap.count("type") < 1) {
@@ -197,11 +222,34 @@ static void onMessage(const MessageMetadata& metadata, const uint8_t* payload, s
     } else if (enableVal.equalsIgnoreCase("false")) {
       systemEnabled = false;
     }
+
   } else if (commandType == "emergency") {
+    String enabled = commandMap["enabled"];
+    if (enabled.equalsIgnoreCase("true")) {
+      emergencyFlag = true;
       systemEnabled = false;
+    } else {
+      emergencyFlag = false;
+      systemEnabled = true;
+    }
+
   } else if (commandType == "isFertileReply") {
     String fertile = commandMap["fertile"];
-    if (fertilityCallback) fertilityCallback(fertile.equalsIgnoreCase("true"));
+    String planted = commandMap["planted"];
+    bool canPlant = fertile.equalsIgnoreCase("true") && !planted.equalsIgnoreCase("true");
+
+    int gx = 0, gy = 0;
+    if (commandMap.count("x") && commandMap.count("y")) {
+      gx = commandMap["x"].toInt();
+      gy = commandMap["y"].toInt();
+      if (gx >= 1 && gx <= 9 && gy >= 1 && gy <= 9) {
+        if (planted.equalsIgnoreCase("true"))       gridState[gx-1][gy-1] = 2; // Seeded
+        else if (fertile.equalsIgnoreCase("true"))   gridState[gx-1][gy-1] = 1; // Fertile
+        else                                         gridState[gx-1][gy-1] = 0; // Sterile
+      }
+    }
+    if (fertilityCallback) fertilityCallback(canPlant, gx, gy);
+
   } else if (commandType == "heartbeat") {
     lastHeartbeatMs = millis();
 
@@ -210,6 +258,19 @@ static void onMessage(const MessageMetadata& metadata, const uint8_t* payload, s
     } else if (commandMap["enable"] == "0") {
       systemEnabled = false;
     }
+
+    if (commandMap.count("time_left")) {
+      serverTimeLeft = commandMap["time_left"].toInt();
+    }
+
+  } else if (commandType == "openAirlockReply") {
+    // accepted=true/false — door mechanism is automatic, no action needed
+
+  } else if (commandType == "distress") {
+    // Info about stranded robots — could be used for revival missions
+
+  } else if (commandType == "reviveReply") {
+    // Confirmation of successful rescue
   }
 }
 
@@ -230,4 +291,13 @@ void loopWifi() {
   if (systemEnabled && (millis() - lastHeartbeatMs > HEARTBEAT_TIMEOUT_MS)) {
     systemEnabled = false;
   }
+}
+
+bool isEmergency() { return emergencyFlag; }
+void clearEmergency() { emergencyFlag = false; }
+int getTimeLeft() { return serverTimeLeft; }
+
+uint8_t getCellState(int x, int y) {
+  if (x < 1 || x > 9 || y < 1 || y > 9) return 3;
+  return gridState[x-1][y-1];
 }
