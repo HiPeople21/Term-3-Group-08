@@ -96,9 +96,16 @@ bool gridTurning   = false;
 bool gridDone      = false;
 
 // ===== Task 4: Dead Reckoning =====
-int  drSegment    = 0;   // 0=first 2 fwd, 1=1 fwd, 2=last 2 fwd
-int  drNodesInSeg = 0;
+const int DR_STRAIGHT_SPEED = 600;
+const unsigned long DR_TAG_GONE_MS = 500;
+const unsigned long DR_COUNT_LOCKOUT_MS = 600;
+int  drSegment    = 0;
+int  drRfidCount  = 0;
 bool drDone       = false;
+bool drStarted    = false;
+bool drTagPresent = false;
+unsigned long drLastSeenMs  = 0;
+unsigned long drLastCountMs = 0;
 
 // ===== Task 5: Ramp =====
 bool rampDone = false;
@@ -258,8 +265,12 @@ void resetModeState() {
   gridDone      = false;
 
   drSegment    = 0;
-  drNodesInSeg = 0;
+  drRfidCount  = 0;
   drDone       = false;
+  drStarted    = false;
+  drTagPresent = false;
+  drLastSeenMs  = 0;
+  drLastCountMs = 0;
 
   rampDone   = false;
   rampEnteredAt = 0;
@@ -383,7 +394,8 @@ void runGridNav() {
 // TASK 4: Open-Field Dead Reckoning
 // Same manoeuvre as Task 3 but no lines — drive straight and
 // count RFID tags at each node to know when to turn.
-// Segments: fwd 2 nodes → R90 → fwd 1 node → L90 → fwd 2 nodes.
+// Segments: fwd 2 nodes → R90 → fwd 1 node → L98 → fwd 2 nodes.
+// Uses debounced RFID detection and turn correction factor 4.15/4.
 // ================================================================
 
 void runDeadReckoning() {
@@ -391,38 +403,74 @@ void runDeadReckoning() {
 
   if (turnActive) {
     if (checkTurnDone()) {
-      drNodesInSeg = 0;
-      driveStraight(baseSpeed);
-      Serial.println("[T4] Turn complete, driving");
+      delay(200);
+      drRfidCount = 0;
+      drTagPresent = true;
+      drLastSeenMs = millis();
+      drLastCountMs = millis();
+      driveStraight(DR_STRAIGHT_SPEED);
     }
     return;
   }
 
-  driveStraight(baseSpeed);
+  // Debounced RFID detection (from SGN)
+  bool seen = (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()
+               && mfrc522.uid.size > 0);
+  if (seen) mfrc522.PICC_HaltA();
 
-  String uid = readRFIDTag();
-  if (uid.length() > 0) {
-    drNodesInSeg++;
-    // Serial.print("[T4] RFID node (seg ");
-    // Serial.print(drSegment);
-    // Serial.print(" count ");
-    // Serial.print(drNodesInSeg);
-    // Serial.println(")");
+  unsigned long now = millis();
+  bool hasNewTag = false;
 
-    if (drSegment == 0 && drNodesInSeg >= 2) {
+  if (seen) {
+    drLastSeenMs = now;
+    if (!drTagPresent) {
+      drTagPresent = true;
+      if (now - drLastCountMs > DR_COUNT_LOCKOUT_MS) {
+        hasNewTag = true;
+        drLastCountMs = now;
+      }
+    }
+  } else {
+    if (drTagPresent && (now - drLastSeenMs > DR_TAG_GONE_MS)) drTagPresent = false;
+  }
+
+  // Wait for first RFID tag to start
+  if (!drStarted) {
+    if (hasNewTag) {
+      delay(3000);
+      drRfidCount = 0;
+      drTagPresent = true;
+      drLastSeenMs = millis();
+      drLastCountMs = millis();
+      drStarted = true;
+      driveStraight(DR_STRAIGHT_SPEED);
+    }
+    return;
+  }
+
+  // Keep driving straight
+  driveStraight(DR_STRAIGHT_SPEED);
+
+  if (hasNewTag) {
+    drRfidCount++;
+
+    // SGN uses turn correction 4.15/4; shared startTurn uses 4.75/4
+    // Scale angles to match: angle * (4.15/4.75)
+    const float drTurnScale = 4.15f / 4.75f;
+
+    if (drSegment == 0 && drRfidCount >= 2) {
       stopTracks();
-      beginTurnDeg(90.0);
+      delay(200);
+      beginTurnDeg(90.0 * drTurnScale);
       drSegment = 1;
-      // Serial.println("[T4] Turn R 90");
-    } else if (drSegment == 1 && drNodesInSeg >= 1) {
+    } else if (drSegment == 1 && drRfidCount >= 1) {
       stopTracks();
-      beginTurnDeg(-90.0);
+      delay(200);
+      beginTurnDeg(-98.0 * drTurnScale);
       drSegment = 2;
-      // Serial.println("[T4] Turn L 90");
-    } else if (drSegment == 2 && drNodesInSeg >= 2) {
+    } else if (drSegment == 2 && drRfidCount >= 2) {
       stopTracks();
       drDone = true;
-      // Serial.println("[T4] Complete!");
     }
   }
 }
