@@ -419,30 +419,15 @@ void setup() {
   setFertilityCallback([](bool canPlant, int x, int y) {
     if (subState != SS_WAIT_FERTILITY) return;
 
-    // Store server-confirmed position
     if (x >= 1 && x <= 9 && y >= 1 && y <= 9) {
       gridX = x;
       gridY = y;
-      onLinedHalf = (y > UNLINED_ROWS);
     }
 
     if (canPlant) {
       subState = SS_DRIVE_TO_HOLE;
-    } else if (onLinedHalf) {
-      subState = SS_FOLLOWING;
-      blankStartedAt = 0;
-      resetPID();
     } else {
-      if (nodesInColumn >= 9) {
-        subState = SS_COLUMN_END;
-        uTurnStep = 0;
-      } else if (y >= UNLINED_ROWS) {
-        subState = SS_FIND_LINE;
-        blankStartedAt = millis();
-      } else {
-        driveStartTicks = getTrackEncoder();
-        subState = SS_DEAD_RECKON;
-      }
+      subState = SS_FOLLOWING;
     }
   });
 }
@@ -622,67 +607,21 @@ void loop() {
           break;
         }
 
-        // ------ Lined half: PID line follow along a column ------
         case SS_FOLLOWING: {
           runLineFollower();
-
-          // RFID as primary node detector — every hole has a tag
-          if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
-            detectedUID = "";
-            for (byte i = 0; i < mfrc522.uid.size; i++) {
-              if (mfrc522.uid.uidByte[i] < 0x10) detectedUID += "0";
-              detectedUID += String(mfrc522.uid.uidByte[i], HEX);
-            }
-            detectedUID.toUpperCase();
-            mfrc522.PICC_HaltA();
-            mfrc522.PCD_StopCrypto1();
-
-            nodesInColumn++;
-            encoderAtIR = getTrackEncoder();
-            stopTracks();
-            checkFertility(detectedUID);
-            fertilityRequestedAt = millis();
-            subState = SS_WAIT_FERTILITY;
-            break;
-          }
-
-          // IR fallback — detect hole, then scan RFID in SS_WAIT_RFID
           if (checkForHole()) {
             irDetectedAt = millis();
-            encoderAtIR = getTrackEncoder();
+            encoderAtIR  = getTrackEncoder();
             subState = SS_WAIT_RFID;
-            break;
-          }
-
-          if (isJunction()) {
+          } else if (isJunction()) {
             stopTracks();
             subState = SS_JUNCTION;
-            break;
-          }
-
-          // Sustained blank after visiting nodes — lines ended or column done
-          if (nodesInColumn > 0 && isBlank()) {
-            if (blankStartedAt == 0) blankStartedAt = millis();
-            if (millis() - blankStartedAt > 800) {
-              stopTracks();
-              if (nodesInColumn >= 9) {
-                subState = SS_COLUMN_END;
-                uTurnStep = 0;
-              } else {
-                onLinedHalf = false;
-                driveStartTicks = getTrackEncoder();
-                subState = SS_DEAD_RECKON;
-              }
-            }
-          } else if (!isBlank()) {
-            blankStartedAt = 0;
           }
           break;
         }
 
-        // ------ Junction: drive through and resume ------
         case SS_JUNCTION: {
-          driveStraight((int)(600 * voltageScale));
+          driveStraight(600 * voltageScale);
           delay(200);
           stopTracks();
           lastJunctionTick = getTrackEncoder();
@@ -691,10 +630,9 @@ void loop() {
           break;
         }
 
-        // ------ Hole detected on lined half, scan RFID ------
         case SS_WAIT_RFID: {
           if (isJunction()) {
-            driveStraight((int)(600 * voltageScale));
+            driveStraight(600 * voltageScale);
           } else {
             runLineFollower();
           }
@@ -711,10 +649,11 @@ void loop() {
               detectedUID += String(mfrc522.uid.uidByte[i], HEX);
             }
             detectedUID.toUpperCase();
+
             mfrc522.PICC_HaltA();
             mfrc522.PCD_StopCrypto1();
-            nodesInColumn++;
             stopTracks();
+
             checkFertility(detectedUID);
             fertilityRequestedAt = millis();
             subState = SS_WAIT_FERTILITY;
@@ -722,31 +661,13 @@ void loop() {
           break;
         }
 
-        // ------ Waiting for server fertility reply ------
-        case SS_WAIT_FERTILITY: {
-          stopTracks();
-          if (millis() - fertilityRequestedAt > FERTILITY_TIMEOUT_MS) {
-            if (onLinedHalf) {
-              subState = SS_FOLLOWING;
-              blankStartedAt = 0;
-              resetPID();
-            } else {
-              if (nodesInColumn >= 9) { subState = SS_COLUMN_END; uTurnStep = 0; }
-              else if (nodesInColumn >= UNLINED_ROWS) { subState = SS_FIND_LINE; blankStartedAt = millis(); }
-              else { driveStartTicks = getTrackEncoder(); subState = SS_DEAD_RECKON; }
-            }
-          }
-          break;
-        }
-
-        // ------ Drive encoder-counted distance to position planter over hole ------
         case SS_DRIVE_TO_HOLE: {
           long currentTicks = getTrackEncoder();
           long tickTarget   = encoderAtIR + ticksToHole;
-          long encError     = tickTarget - currentTicks;
+          long encerror     = tickTarget - currentTicks;
 
-          if (encError > 5) {
-            driveStraight((int)(600 * voltageScale));
+          if (encerror > 5) {
+            driveStraight(600 * voltageScale);
           } else {
             stopTracks();
             planterTarget = getPlanterEncoder() + ticksToPlant;
@@ -755,24 +676,24 @@ void loop() {
           break;
         }
 
-        // ------ Rotate planter to drop one seed ------
         case SS_PLANTING: {
           long planterPos = getPlanterEncoder();
+
           if (abs(planterPos - planterTarget) > 5) {
-            setPlanter((int)(500 * voltageScale));
+            setPlanter(500 * voltageScale);
           } else {
             setPlanter(0);
             delay(500);
             resetPID();
+            subState = SS_FOLLOWING;
+          }
+          break;
+        }
 
-            if (onLinedHalf) {
-              subState = SS_FOLLOWING;
-              blankStartedAt = 0;
-            } else {
-              if (nodesInColumn >= 9) { subState = SS_COLUMN_END; uTurnStep = 0; }
-              else if (nodesInColumn >= UNLINED_ROWS) { subState = SS_FIND_LINE; blankStartedAt = millis(); }
-              else { driveStartTicks = getTrackEncoder(); subState = SS_DEAD_RECKON; }
-            }
+        case SS_WAIT_FERTILITY: {
+          stopTracks();
+          if (millis() - fertilityRequestedAt > FERTILITY_TIMEOUT_MS) {
+            subState = SS_FOLLOWING;
           }
           break;
         }
