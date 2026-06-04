@@ -1,21 +1,3 @@
-// ============================================================
-// main.ino — Competition sketch for Year 1 Robotics Challenge 2026
-//
-// Full challenge flow:
-//   1. BASE_EXIT:    Line follow from deployment → RFID tag → openAirlock A (exit)
-//   2. TUNNEL_OUT:   Wall follow through Airlock A tunnel into arena
-//   3. ARENA:        Navigate lined grid, read RFID tags, check fertility, plant seeds
-//   4. ARENA_RETURN: Turn 180°, line follow back, scan re-entry RFID → openAirlock B
-//   5. TUNNEL_IN:    Wall follow through Airlock B tunnel back to base
-//   6. BASE_PARK:    Line follow to parking area
-//
-// Airlock A = exit from base.  Airlock B = reentry into base.
-//
-// Kill switch (pin 39) toggles start/stop.
-// Revival button (pin 48) lights green LED when pressed.
-// Emergency warnings trigger immediate return to base.
-// ============================================================
-
 #include <Wire.h>
 #include <MFRC522_I2C.h>
 #include "motors.h"
@@ -31,51 +13,42 @@
 // ===== RFID =====
 MFRC522_I2C mfrc522(0x28, -1, &Wire1);
 
-// ===== Voltage Compensation (6V motors on 7.2V battery) =====
+// ===== Voltage Compensation =====
 const float voltageScale = 6.0 / 7.2;
 
 // ===== Line-Following PID =====
-float Kp = 1.75, Ki = 0.0, Kd = 0.0;
-const int baseSpeed  = (int)(800 * voltageScale);
-const int arenaSpeed = (int)(800 * voltageScale);
-const int maxSpeed   = (int)(850 * voltageScale);
-const int minSpeed   = -(int)(800 * voltageScale);
+float Kp = 2.0, Ki = 0.0, Kd = 0.0;
+const int baseSpeed = (int)(800 * voltageScale);
+const int maxSpeed  = (int)(850 * voltageScale);
+const int minSpeed  = -(int)(800 * voltageScale);
 const int setpoint  = 5500;
 float integral = 0, prevError = 0;
 unsigned long prevTime = 0;
 
-// ===== Wall-Following PID (tunnels) — from wallfollowing_2 =====
-// float Kp_wall = 2.0, Ki_wall = 0.0, Kd_wall = 7.0;
+// ===== Wall-Following PID =====
 float Kp_wall = 5.0, Ki_wall = 0.0, Kd_wall = 0.0;
 const int WALL_TARGET_MM = 70;
 const int WALL_BASE_PWM  = 580;
-const int WALL_DEADBAND  = 60;
 float integral_wall = 0, prevError_wall = 0;
 unsigned long lastWallControl = 0;
 float smoothedRight = 70.0, smoothedLeft = 70.0;
 unsigned long tunnelEnteredAt = 0;
 unsigned long wallLostAt = 0;
 
-// ===== Arena & Planting =====
+// ===== Arena & Planting (from ir_array_test) =====
 const long ticksToHole  = 1355;
-const long ticksToPlant = 1400/6;
-const unsigned long IR_WINDOW_MS         = 1000;
-const unsigned long FERTILITY_TIMEOUT_MS = 5000;
-const unsigned long ARENA_TIME_MS        = 240000; // fallback: 4 min if server time unavailable
-const int RETURN_BUFFER_SECS             = 60;     // start returning with 60s left
-
+const long ticksToPlant = 233;
+const unsigned long IR_WINDOW_MS = 1000;
 int seedsPlanted = 0;
 const int MAX_SEEDS = 5;
 unsigned long arenaEnteredAt = 0;
 long encoderAtIR = 0;
 unsigned long irDetectedAt = 0;
-unsigned long fertilityRequestedAt = 0;
 long planterTarget = 0;
 int prevMiddleValue = 0;
 String detectedUID = "";
 
 // ===== Junction Tracking =====
-const long junctionCooldownTicks = 200;
 long lastJunctionTick = -9999;
 
 // ===== Kill Switch =====
@@ -102,26 +75,7 @@ unsigned long blankStartedAt = 0;
 bool airlockBRequested = false;
 
 // ===== Base Exit Tracking =====
-int baseJunctionCount = 0;
 bool airlockARequested = false;
-
-// ===== Arena Grid Navigation =====
-const float TICKS_PER_MM = 1400.0 / (38.5 * PI);
-const long NODE_SPACING_TICKS = (long)(250.0 * TICKS_PER_MM);
-const int ENTRY_COL = 3;
-const int EXIT_COL  = 7;
-
-int nodesInColumn = 0;
-int columnsDone = 0;
-int gridDir = 1;           // +1 = going R9→R6, -1 = going R6→R9
-int lateralDir = 1;        // +1 = shifting right (toward C9), -1 = shifting left (toward C1)
-int currentCol = ENTRY_COL;
-int uTurnStep = 0;
-long driveStartTicks = 0;
-bool holeDetectedByIR = false;
-
-// Server-confirmed grid position (from isFertileReply)
-int gridX = ENTRY_COL, gridY = 9;
 
 // ===== Challenge Stages =====
 enum Stage {
@@ -134,20 +88,20 @@ enum Stage {
   STAGE_DONE
 };
 Stage stage = STAGE_BASE_EXIT;
-// Stage stage = STAGE_TUNNEL_OUT;
 
-// ===== Substates =====
-enum SubState {
-  SS_FOLLOWING,
-  SS_JUNCTION,
-  SS_WAIT_RFID,
-  SS_WAIT_FERTILITY,
-  SS_DRIVE_TO_HOLE,
-  SS_PLANTING,
-  SS_FIND_LINE,
-  SS_COLUMN_END
+// ===== Arena Substates (from ir_array_test — DO NOT CHANGE) =====
+enum ArenaState {
+  FOLLOWING,
+  WAITING_FOR_RFID,
+  DRIVING_TO_HOLE,
+  PLANTING,
+  JUNCTION_HANDLING
 };
-SubState subState = SS_FOLLOWING;
+ArenaState arenaState = FOLLOWING;
+
+// ===== Base Exit Substates =====
+enum BaseSubState { BS_FOLLOWING, BS_JUNCTION };
+BaseSubState baseSubState = BS_FOLLOWING;
 
 // ================================================================
 // LINE-FOLLOWING HELPERS
@@ -171,11 +125,11 @@ void resetPID() {
   prevTime = millis();
 }
 
-void runLineFollower(int speed = baseSpeed) {
+void runLineFollower() {
   uint16_t position = readIRPosition();
   float correction = computePID(position);
-  int leftSpeed  = constrain(speed - correction, minSpeed, maxSpeed);
-  int rightSpeed = constrain(speed + correction, minSpeed, maxSpeed);
+  int leftSpeed  = constrain(baseSpeed - correction, minSpeed, maxSpeed);
+  int rightSpeed = constrain(baseSpeed + correction, minSpeed, maxSpeed);
   setLeftTrack(leftSpeed);
   setRightTrack(rightSpeed);
 }
@@ -209,8 +163,7 @@ bool isBlank() {
 }
 
 bool checkForHole() {
-  uint8_t midIdx = getIRSensorCount() / 2;
-  int middleValue = getIRValue(midIdx);
+  int middleValue = getIRValue(getIRSensorCount() / 2);
   bool inHole = middleValue >= 100 && middleValue <= 400;
   bool wasOutside = prevMiddleValue < 100 || prevMiddleValue > 400;
   prevMiddleValue = middleValue;
@@ -232,23 +185,7 @@ String readRFIDTag() {
 }
 
 // ================================================================
-// ARENA TIMER / SEED COUNT
-// ================================================================
-
-bool shouldReturnToBase() {
-  if (seedsPlanted >= MAX_SEEDS) return true;
-  if (isEmergency()) return true;
-  // Prefer server-provided time_left over manual timer
-  int timeLeft = getTimeLeft();
-  if (timeLeft >= 0 && timeLeft <= RETURN_BUFFER_SECS) return true;
-  // Fallback if server hasn't sent time_left yet
-  if (timeLeft < 0 && arenaEnteredAt > 0 && (millis() - arenaEnteredAt) > ARENA_TIME_MS) return true;
-  return false;
-}
-
-// ================================================================
-// WALL FOLLOWING (tunnels)
-// Returns true when tunnel exit detected (walls gone for > 500ms)
+// WALL FOLLOWING
 // ================================================================
 
 void resetWallFollow() {
@@ -275,11 +212,9 @@ bool runWallFollow() {
   if (seeR) smoothedRight = 0.5f * (float)dR + 0.5f * smoothedRight;
   if (seeL) smoothedLeft  = 0.5f * (float)dL + 0.5f * smoothedLeft;
 
-  // Track whether we've ever seen walls (for tunnel exit detection)
   if ((seeR || seeL) && tunnelEnteredAt == 0) tunnelEnteredAt = millis();
 
   if (!seeR && !seeL) {
-    // No walls seen at all
     if (tunnelEnteredAt == 0) {
       driveStraight(WALL_BASE_PWM);
       lastWallControl = now;
@@ -303,7 +238,6 @@ bool runWallFollow() {
 
   wallLostAt = 0;
 
-  // Dynamic wall selection (from wallfollowing_2) — follow the closer wall
   float error = 0.0;
   bool followRight = true;
 
@@ -327,8 +261,6 @@ bool runWallFollow() {
   integral_wall = constrain(integral_wall, -300.0f, 300.0f);
   float derivative = (error - prevError_wall) / dt;
   float correction = (Kp_wall * error) + (Ki_wall * integral_wall) + (Kd_wall * derivative);
-
-  // Clamp correction to prevent violent turns when entering at an angle
   correction = constrain(correction, -200.0f, 200.0f);
 
   int cmdL = WALL_BASE_PWM, cmdR = WALL_BASE_PWM;
@@ -371,21 +303,17 @@ void checkReviveButton() {
 }
 
 void updateLED() {
-  // Revival: button pressed → green LED (challenge spec: red default, green on press)
   if (digitalRead(REVIVE_BUTTON_PIN) == LOW) {
     digitalWrite(LED_RED_PIN, LOW);
     digitalWrite(LED_GREEN_PIN, HIGH);
     return;
   }
-
   bool killed = isKilledLocal || (!isSystemEnabled() && !isEmergency());
   if (!killed) {
-    // Running: red LED on (challenge spec: default red)
     digitalWrite(LED_RED_PIN, HIGH);
     digitalWrite(LED_GREEN_PIN, LOW);
     return;
   }
-  // Killed/disabled: blink red
   unsigned long now = millis();
   if (now - ledPrevMillis >= (unsigned long)blinkInterval) {
     ledPrevMillis = now;
@@ -400,7 +328,6 @@ void updateLED() {
 // ================================================================
 
 void setup() {
-  Serial.begin(115200);
   Wire1.begin();
   mfrc522.PCD_Init();
   initMotors();
@@ -418,23 +345,7 @@ void setup() {
   register_bot();
   setupGrid();
 
-  setFertilityCallback([](bool canPlant, int x, int y) {
-    if (subState != SS_WAIT_FERTILITY) return;
-
-    if (x >= 1 && x <= 9 && y >= 1 && y <= 9) {
-      gridX = x;
-      gridY = y;
-      currentCol = x;
-    }
-
-    if (canPlant && holeDetectedByIR) {
-      subState = SS_DRIVE_TO_HOLE;
-    } else {
-      subState = SS_FOLLOWING;
-      blankStartedAt = 0;
-      resetPID();
-    }
-  });
+  prevTime = millis();
 }
 
 // ================================================================
@@ -447,7 +358,6 @@ void loop() {
   checkReviveButton();
   updateLED();
 
-  // During emergency the robot must actively return, not just stop
   bool killed = isKilledLocal || (!isSystemEnabled() && !isEmergency());
 
   static bool wasKilled = false;
@@ -461,7 +371,6 @@ void loop() {
 
   if (killed) return;
 
-  // Global turn handler — blocks stage logic until turn completes
   if (turnActive) {
     if (updateTurn()) {
       turnActive = false;
@@ -474,21 +383,15 @@ void loop() {
 
     // ============================================================
     // STAGE 1: BASE EXIT
-    // Base layout: Start → Junction 1 (branches L/R) →
-    //   Right path: two left curves with RFID tag between them →
-    //   Junction 2 → straight to Airlock A door → tunnel.
-    // Turn RIGHT at both junctions.  RFID is read while moving.
     // ============================================================
     case STAGE_BASE_EXIT: {
-      switch (subState) {
-        case SS_FOLLOWING: {
-          // --- After RFID: line follow 10s (wait for door), straight 2s, wall follow ---
+      switch (baseSubState) {
+        case BS_FOLLOWING: {
           if (airlockARequested) {
             if (blankStartedAt == 0) blankStartedAt = millis();
             unsigned long elapsed = millis() - blankStartedAt;
 
             if (elapsed < 10500) {
-              // Handle J2: pivot right at junctions/side branches
               uint8_t lastIdx = getIRSensorCount() - 1;
               bool sideBranch = (getIRValue(0) > 800 && getIRValue(1) > 800) ||
                                 (getIRValue(lastIdx) > 800 && getIRValue(lastIdx - 1) > 800);
@@ -509,7 +412,6 @@ void loop() {
             break;
           }
 
-          // --- Before RFID: line follow + scan + handle junctions ---
           runLineFollower();
 
           String uid = readRFIDTag();
@@ -523,125 +425,137 @@ void loop() {
 
           if (isJunction()) {
             stopTracks();
-            subState = SS_JUNCTION;
+            baseSubState = BS_JUNCTION;
           } else if (isBlank()) {
             driveStraight((int)(500 * voltageScale));
           }
           break;
         }
 
-        case SS_JUNCTION: {
+        case BS_JUNCTION: {
           lastJunctionTick = getTrackEncoder();
           angleRight((int)(700 * voltageScale));
           delay(300);
           resetPID();
-          subState = SS_FOLLOWING;
+          baseSubState = BS_FOLLOWING;
           break;
         }
-
-        default: break;
       }
       break;
     }
 
     // ============================================================
     // STAGE 2: TUNNEL OUT
-    // Wall follow through Airlock A tunnel (with ramp) into arena.
     // ============================================================
     case STAGE_TUNNEL_OUT: {
       digitalWrite(LED_GREEN_PIN, HIGH);
-
       if (runWallFollow()) {
         arenaEnteredAt = millis();
         clearEmergency();
         stage = STAGE_ARENA;
-        subState = SS_FIND_LINE;
-        blankStartedAt = millis();
+        arenaState = FOLLOWING;
         resetPID();
+        Kp = 2.0, Ki = 0.0, Kd = 0.0;
       }
       break;
     }
 
     // ============================================================
-    // STAGE 3: ARENA
-    // Boustrophedon scan: follow columns on the lined half (line
-    // following), then dead-reckon columns on the unlined half.
-    // At each node: read RFID → check fertility → plant if ok.
-    // U-turn at end of each column to reach the next one.
+    // STAGE 3: ARENA — ir_array_test logic, untouched
+    //
+    // Line follow. IR detects hole → scan RFID while driving
+    // ticksToHole → plant. Junctions: drive straight through.
     // ============================================================
     case STAGE_ARENA: {
-      switch (subState) {
 
-        case SS_FOLLOWING: {
-          runLineFollower(arenaSpeed);
+      switch (arenaState) {
 
-          // Hole detected by IR — record position, scan RFID while driving to planter
+        case FOLLOWING: {
+          runLineFollower();
           if (checkForHole()) {
-            encoderAtIR = getTrackEncoder();
-            detectedUID = "";
-            subState = SS_DRIVE_TO_HOLE;
+            irDetectedAt = millis();
+            encoderAtIR  = getTrackEncoder();
+            arenaState = WAITING_FOR_RFID;
           } else if (isJunction()) {
-            driveStraight(arenaSpeed);
-            delay(200);
-            resetPID();
+            stopTracks();
+            arenaState = JUNCTION_HANDLING;
           }
           break;
         }
 
-        case SS_DRIVE_TO_HOLE: {
-          long encerror = (encoderAtIR + ticksToHole) - getTrackEncoder();
+        case JUNCTION_HANDLING: {
+          driveStraight(600 * voltageScale);
+          delay(200);
+          stopTracks();
+          lastJunctionTick = getTrackEncoder();
+          resetPID();
+          arenaState = FOLLOWING;
+          break;
+        }
+
+        case WAITING_FOR_RFID: {
+          if (isJunction()) {
+            driveStraight(600 * voltageScale);
+          } else {
+            runLineFollower();
+          }
+
+          if (millis() - irDetectedAt > IR_WINDOW_MS) {
+            arenaState = FOLLOWING;
+            break;
+          }
+
+          if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
+            detectedUID = "";
+            for (byte i = 0; i < mfrc522.uid.size; i++) {
+              if (mfrc522.uid.uidByte[i] < 0x10) detectedUID += "0";
+              detectedUID += String(mfrc522.uid.uidByte[i], HEX);
+            }
+            detectedUID.toUpperCase();
+            mfrc522.PICC_HaltA();
+            mfrc522.PCD_StopCrypto1();
+            checkFertility(detectedUID);
+            arenaState = DRIVING_TO_HOLE;
+          }
+          break;
+        }
+
+        case DRIVING_TO_HOLE: {
+          long currentTicks = getTrackEncoder();
+          long tickTarget   = encoderAtIR + ticksToHole;
+          long encerror     = tickTarget - currentTicks;
 
           if (encerror > 5) {
-            driveStraight(arenaSpeed);
-
-            // Try to grab RFID tag on the way
-            if (detectedUID.length() == 0) {
-              if (mfrc522.PICC_IsNewCardPresent() && mfrc522.PICC_ReadCardSerial()) {
-                detectedUID = "";
-                for (byte i = 0; i < mfrc522.uid.size; i++) {
-                  if (mfrc522.uid.uidByte[i] < 0x10) detectedUID += "0";
-                  detectedUID += String(mfrc522.uid.uidByte[i], HEX);
-                }
-                detectedUID.toUpperCase();
-                mfrc522.PICC_HaltA();
-                mfrc522.PCD_StopCrypto1();
-                checkFertility(detectedUID);
-              }
-            }
+            driveStraight(600 * voltageScale);
           } else {
             stopTracks();
-            planterTarget = getPlanterEncoder() + ticksToPlant;
-            subState = SS_PLANTING;
+            planterTarget    = getPlanterEncoder() + ticksToPlant;
+            arenaState = PLANTING;
           }
           break;
         }
 
-        case SS_PLANTING: {
+        case PLANTING: {
           long planterPos = getPlanterEncoder();
 
           if (abs(planterPos - planterTarget) > 5) {
-            setPlanter((int)(500 * voltageScale));
+            setPlanter(500 * voltageScale);
           } else {
             setPlanter(0);
             seedsPlanted++;
             if (detectedUID.length() > 0) seedPlanted(detectedUID);
-            delay(300);
+            delay(500);
             resetPID();
-            subState = SS_FOLLOWING;
+            arenaState = FOLLOWING;
           }
           break;
         }
-
-        default: break;
       }
       break;
     }
 
     // ============================================================
     // STAGE 4: ARENA RETURN
-    // Turn 180°, line follow back to base-side edge, turn left 90°
-    // toward Airlock B, drive forward scanning for re-entry RFID
-    // tag, send openAirlock(uid, 'B'), enter tunnel.
     // ============================================================
     case STAGE_ARENA_RETURN: {
       switch (returnStep) {
@@ -651,17 +565,13 @@ void loop() {
           returnStep = 1;
           break;
         }
-
         case 1: {
-          // Turn just completed
           resetPID();
           blankStartedAt = 0;
           returnStep = 2;
           break;
         }
-
         case 2: {
-          // Line follow back toward base edge
           if (isBlank()) {
             if (blankStartedAt == 0) blankStartedAt = millis();
             if (millis() - blankStartedAt > 1500) {
@@ -680,7 +590,6 @@ void loop() {
             }
           }
 
-          // Also scan for RFID while returning — might hit re-entry tag
           if (!airlockBRequested) {
             String uid = readRFIDTag();
             if (uid.length() > 0) {
@@ -690,38 +599,23 @@ void loop() {
           }
           break;
         }
-
         case 3: {
-          // Turn left 90° toward Airlock B (re-entry tunnel)
           startTurn(-90.0);
           turnActive = true;
           returnStep = 4;
           break;
         }
-
         case 4: {
-          // Turn just completed → start seeking tunnel
           returnStep = 5;
           break;
         }
-
         case 5: {
-          // Drive forward looking for Airlock B tunnel (TOF detects walls)
-
-          // Scan for re-entry RFID tag and send airlock request
           if (!airlockBRequested) {
             String uid = readRFIDTag();
             if (uid.length() > 0) {
               openAirlock(uid, 'B');
               airlockBRequested = true;
             }
-          }
-
-          // Check front for wall (arena boundary)
-          float frontDist = getFrontDistanceCm();
-          if (frontDist > 0 && frontDist < 8.0) {
-            stopTracks();
-            break;
           }
 
           driveStraight(baseSpeed);
@@ -744,13 +638,11 @@ void loop() {
 
     // ============================================================
     // STAGE 5: TUNNEL IN
-    // Wall follow through Airlock B tunnel back to base.
     // ============================================================
     case STAGE_TUNNEL_IN: {
       if (runWallFollow()) {
         clearEmergency();
         stage = STAGE_BASE_PARK;
-        subState = SS_FIND_LINE;
         blankStartedAt = millis();
         resetPID();
       }
@@ -759,63 +651,30 @@ void loop() {
 
     // ============================================================
     // STAGE 6: BASE PARK
-    // Follow line from Airlock B entrance to parking area.
-    // Scans RFID tags along the way (tag B for opening airlock
-    // to help other robots re-enter).
     // ============================================================
     case STAGE_BASE_PARK: {
-      switch (subState) {
-        case SS_FIND_LINE: {
+      if (isBlank()) {
+        if (blankStartedAt == 0) blankStartedAt = millis();
+        if (millis() - blankStartedAt > 3000) {
+          stopTracks();
+          stage = STAGE_DONE;
+        } else {
           driveStraight(baseSpeed);
-          if (!isBlank()) {
-            subState = SS_FOLLOWING;
-            blankStartedAt = 0;
-            resetPID();
-          }
-          if (millis() - blankStartedAt > 5000) {
-            stopTracks();
-            stage = STAGE_DONE;
-          }
-          break;
         }
-
-        case SS_FOLLOWING: {
-          runLineFollower();
-
-          // Read RFID tags along parking path
-          String uid = readRFIDTag();
-          if (uid.length() > 0) {
-            openAirlock(uid, 'B');
-          }
-
-          if (isJunction()) {
-            stopTracks();
-            subState = SS_JUNCTION;
-          }
-
-          // Detect parking area (line ends)
-          if (isBlank()) {
-            if (blankStartedAt == 0) blankStartedAt = millis();
-            if (millis() - blankStartedAt > 2000) {
-              stopTracks();
-              stage = STAGE_DONE;
-            }
-          } else {
-            blankStartedAt = 0;
-          }
-          break;
-        }
-
-        case SS_JUNCTION: {
+      } else {
+        blankStartedAt = 0;
+        if (isJunction()) {
           angleRight((int)(500 * voltageScale));
           delay(200);
           resetPID();
-          blankStartedAt = 0;
-          subState = SS_FOLLOWING;
-          break;
+        } else {
+          runLineFollower();
         }
+      }
 
-        default: break;
+      String uid = readRFIDTag();
+      if (uid.length() > 0) {
+        openAirlock(uid, 'B');
       }
       break;
     }

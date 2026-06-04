@@ -3,14 +3,14 @@
 
 MotoronI2C mc;
 
-#define ENCODER_A 22
-#define ENCODER_B 24
+#define ENCODER_A 47
+#define ENCODER_B 45
 
 volatile long encoderPos = 0; 
 long targetPos = 0;
 
 float countsPerRevolution = 1400.0; 
-long ticksFor60Degrees = countsPerRevolution / 6; // 250 ticks
+long ticksFor60Degrees = countsPerRevolution / 5.75; // 250 ticks
 
 unsigned long lastPrintTime = 0;
 

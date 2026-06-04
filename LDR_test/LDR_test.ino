@@ -1,7 +1,7 @@
 // LDR on Arduino Giga R1 WiFi
 // Circuit: LDR between A0 and 3.3V, 10kΩ pull-down resistor to GND
 
-const int LDR_PIN    = A0;
+#define LDR_PIN A7
 const int LED_PIN    = LED_BUILTIN;
 
 // Thresholds (tune these to your environment)
